@@ -11,6 +11,8 @@ interface EditorCanvasProps {
 
 export interface EditorCanvasRef {
   addText: () => void;
+  updateTextStyle: (property: 'fontFamily' | 'fontSize' | 'fill', value: string | number) => void;
+  getActiveTextStyle: () => { fontFamily: string; fontSize: number; fill: string } | null;
   download: () => void;
 }
 
@@ -36,8 +38,10 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
     
     if (!canvas || !container || !bgImage || originalWidth === 0) return;
 
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+    // Account for padding (16px on each side = p-4)
+    const padding = 16;
+    const containerWidth = container.clientWidth - (padding * 2);
+    const containerHeight = container.clientHeight - (padding * 2);
     
     // Calculate scale to fit image within container (contain behavior)
     const scale = Math.min(containerWidth / originalWidth, containerHeight / originalHeight);
@@ -48,19 +52,32 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
     
     canvas.setDimensions({ width: newWidth, height: newHeight });
     
-    // Scale and position both layers
-    bgImage.scale(scale);
-    bgImage.set({ left: 0, top: 0 });
+    // Scale and position both layers - ensure origin is top-left
+    bgImage.set({ 
+      scaleX: scale, 
+      scaleY: scale, 
+      left: 0, 
+      top: 0,
+      originX: 'left',
+      originY: 'top'
+    });
     bgImage.setCoords();
     
     if (fgImage) {
-      fgImage.scale(scale);
-      fgImage.set({ left: 0, top: 0 });
+      fgImage.set({ 
+        scaleX: scale, 
+        scaleY: scale, 
+        left: 0, 
+        top: 0,
+        originX: 'left',
+        originY: 'top'
+      });
       fgImage.setCoords();
     }
     
     canvas.requestRenderAll();
   };
+
 
   useImperativeHandle(ref, () => ({
     addText: () => {
@@ -96,6 +113,30 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
       
       canvas.requestRenderAll();
     },
+    updateTextStyle: (property: 'fontFamily' | 'fontSize' | 'fill', value: string | number) => {
+      const canvas = canvasInstance.current;
+      if (!canvas) return;
+      
+      const activeObject = canvas.getActiveObject();
+      if (activeObject && activeObject.type === 'i-text') {
+        activeObject.set(property, value);
+        canvas.requestRenderAll();
+      }
+    },
+    getActiveTextStyle: () => {
+      const canvas = canvasInstance.current;
+      if (!canvas) return null;
+      
+      const activeObject = canvas.getActiveObject();
+      if (activeObject && activeObject.type === 'i-text') {
+        return {
+          fontFamily: activeObject.get('fontFamily') as string,
+          fontSize: activeObject.get('fontSize') as number,
+          fill: activeObject.get('fill') as string,
+        };
+      }
+      return null;
+    },
     download: () => {
       const canvas = canvasInstance.current;
       if (!canvas) return;
@@ -103,6 +144,7 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
       const dataURL = canvas.toDataURL({
         format: 'png',
         quality: 1,
+
         multiplier: 2
       });
       
@@ -164,6 +206,11 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
       try {
         const imgUrl = URL.createObjectURL(file);
         
+        // Process background removal FIRST (before showing anything)
+        onLoadingChange(true);
+        const cutoutUrl = await removeBackground(file);
+        onLoadingChange(false);
+        
         // Load background image
         const bgImage = await fabric.FabricImage.fromURL(imgUrl);
         
@@ -183,14 +230,6 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
         
         canvas.add(bgImage);
         
-        // Initial fit
-        fitToContainer();
-        
-        // Process background removal
-        onLoadingChange(true);
-        const cutoutUrl = await removeBackground(file);
-        onLoadingChange(false);
-        
         // Load foreground (cutout) image
         const fgImage = await fabric.FabricImage.fromURL(cutoutUrl);
         
@@ -206,7 +245,7 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
         canvas.add(fgImage);
         canvas.bringObjectToFront(fgImage);
         
-        // Re-fit with both layers
+        // Fit with both layers ready
         fitToContainer();
         
         // Cleanup blob URL
@@ -224,7 +263,7 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
   return (
     <div 
       ref={containerRef} 
-      className="w-full h-full flex items-center justify-center"
+      className="w-full h-full flex items-center justify-center p-4"
     >
       <canvas ref={canvasEl} />
     </div>

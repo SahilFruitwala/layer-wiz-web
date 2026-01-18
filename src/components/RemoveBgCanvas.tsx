@@ -2,13 +2,11 @@
 
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState, useCallback } from 'react';
 import * as fabric from 'fabric';
-import { useApiRemover, BackendType, RemovalResult } from '@/hooks/useApiRemover';
+import { useBackgroundRemover } from '@/hooks/useBackgroundRemover';
 
 interface RemoveBgCanvasProps {
   file: File | null;
   onLoadingChange: (loading: boolean) => void;
-  backend?: BackendType;
-  onResultChange?: (result: RemovalResult | null) => void;
 }
 
 export interface RemoveBgCanvasRef {
@@ -19,11 +17,11 @@ export interface RemoveBgCanvasRef {
   reset: () => void;
 }
 
-const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ file, onLoadingChange, backend = 'node', onResultChange }, ref) => {
+const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ file, onLoadingChange }, ref) => {
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const canvasInstance = useRef<fabric.Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { removeBackground, isLoading } = useApiRemover();
+  const { removeBackground, isLoading } = useBackgroundRemover();
   
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [brushSize, setBrushSizeState] = useState(30);
@@ -275,16 +273,13 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
       
       try {
         onLoadingChange(true);
-        const result = await removeBackground(file, backend);
+        const cutoutUrl = await removeBackground(file);
         onLoadingChange(false);
         
-        setResultUrl(result.url);
-        if (onResultChange) {
-          onResultChange(result);
-        }
+        setResultUrl(cutoutUrl);
         
         // Load the cutout image into fabric
-        const img = await fabric.FabricImage.fromURL(result.url);
+        const img = await fabric.FabricImage.fromURL(cutoutUrl);
         
         originalDimensionsRef.current = {
           width: img.width || 800,

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const PYTHON_API_URL = 'http://localhost:8000/remove-bg';
 
@@ -6,11 +6,55 @@ export function useBackgroundRemover() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingTime, setProcessingTime] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
+  
+  // Progress simulation interval
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const startProgressSimulation = useCallback(() => {
+    setProgress(0);
+    let currentProgress = 0;
+    
+    // Simulate progress: fast at start, slows down as it approaches 90%
+    progressIntervalRef.current = setInterval(() => {
+      if (currentProgress < 90) {
+        // Progress faster at the beginning, slower near the end
+        const increment = Math.max(0.5, (90 - currentProgress) / 20);
+        currentProgress = Math.min(90, currentProgress + increment);
+        setProgress(Math.round(currentProgress));
+      }
+    }, 100);
+  }, []);
+
+  const stopProgressSimulation = useCallback((success: boolean) => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    // Jump to 100% on success, or stay where it was on error
+    if (success) {
+      setProgress(100);
+      // Reset after a short delay
+      setTimeout(() => setProgress(0), 500);
+    } else {
+      setProgress(0);
+    }
+  }, []);
 
   const removeBackground = useCallback(async (imageSrc: string | Blob | File) => {
     setIsLoading(true);
     setError(null);
     setProcessingTime(null);
+    startProgressSimulation();
     
     try {
       // Convert to File/Blob for API upload
@@ -46,15 +90,18 @@ export function useBackgroundRemover() {
 
       const resultBlob = await response.blob();
       const url = URL.createObjectURL(resultBlob);
+      
+      stopProgressSimulation(true);
       return url;
     } catch (err) {
       console.error('Background removal failed:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
+      stopProgressSimulation(false);
       throw err;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [startProgressSimulation, stopProgressSimulation]);
 
-  return { removeBackground, isLoading, error, processingTime };
+  return { removeBackground, isLoading, error, processingTime, progress };
 }

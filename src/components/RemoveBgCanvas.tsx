@@ -7,6 +7,7 @@ import { useBackgroundRemover } from '@/hooks/useBackgroundRemover';
 interface RemoveBgCanvasProps {
   file: File | null;
   onLoadingChange: (loading: boolean) => void;
+  onProgressChange?: (progress: number) => void;
 }
 
 export interface RemoveBgCanvasRef {
@@ -17,11 +18,11 @@ export interface RemoveBgCanvasRef {
   reset: () => void;
 }
 
-const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ file, onLoadingChange }, ref) => {
+const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ file, onLoadingChange, onProgressChange }, ref) => {
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const canvasInstance = useRef<fabric.Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { removeBackground, isLoading } = useBackgroundRemover();
+  const { removeBackground, isLoading, progress } = useBackgroundRemover();
   
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [brushSize, setBrushSizeState] = useState(30);
@@ -207,6 +208,13 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   useEffect(() => {
     onLoadingChange(isLoading);
   }, [isLoading, onLoadingChange]);
+
+  // Report progress
+  useEffect(() => {
+    if (onProgressChange) {
+      onProgressChange(progress);
+    }
+  }, [progress, onProgressChange]);
 
   // Initialize canvas
   useEffect(() => {

@@ -12,6 +12,7 @@ export default function Home() {
   const removeBgRef = useRef<RemoveBgCanvasRef>(null);
   const [activeFile, setActiveFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [mode, setMode] = useState<EditorMode>('remove-bg');
   
   // Eraser tool state
@@ -65,22 +66,59 @@ export default function Home() {
               ref={removeBgRef} 
               file={activeFile} 
               onLoadingChange={setIsLoading}
+              onProgressChange={setProgress}
             />
           ) : (
             <EditorCanvas 
               ref={editorRef} 
               file={activeFile} 
-              onLoadingChange={setIsLoading} 
+              onLoadingChange={setIsLoading}
+              onProgressChange={setProgress}
             />
           )}
 
-          {/* Loading Overlay */}
+          {/* Loading Overlay with Progress */}
           {isLoading && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-              <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-              <p className="text-white font-medium text-lg animate-pulse">
-                {mode === 'remove-bg' ? 'Removing background with BiRefNet...' : 'Analyzing image layers...'}
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+              <div className="relative w-24 h-24 mb-6">
+                {/* Circular progress background */}
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.1)"
+                    strokeWidth="8"
+                  />
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    fill="none"
+                    stroke="url(#progressGradient)"
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 40}
+                    strokeDashoffset={2 * Math.PI * 40 * (1 - progress / 100)}
+                    className="transition-all duration-200"
+                  />
+                  <defs>
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#06b6d4" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                {/* Percentage text */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-white">{progress}%</span>
+                </div>
+              </div>
+              <p className="text-white font-medium text-lg">
+                {mode === 'remove-bg' ? 'Removing background...' : 'Analyzing layers...'}
               </p>
+              <p className="text-neutral-400 text-sm mt-2">BiRefNet (SOTA 2024)</p>
             </div>
           )}
         </div>

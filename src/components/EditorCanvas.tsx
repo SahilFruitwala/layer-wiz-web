@@ -7,6 +7,7 @@ import { useBackgroundRemover } from '@/hooks/useBackgroundRemover';
 interface EditorCanvasProps {
   file: File | null;
   onLoadingChange: (loading: boolean) => void;
+  onProgressChange?: (progress: number) => void;
 }
 
 export interface EditorCanvasRef {
@@ -16,11 +17,11 @@ export interface EditorCanvasRef {
   download: () => void;
 }
 
-const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onLoadingChange }, ref) => {
+const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onLoadingChange, onProgressChange }, ref) => {
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const canvasInstance = useRef<fabric.Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { removeBackground, isLoading } = useBackgroundRemover();
+  const { removeBackground, isLoading, progress } = useBackgroundRemover();
   
   // Store image references for layer management
   const imageLayersRef = useRef<{
@@ -161,6 +162,13 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
   useEffect(() => {
     onLoadingChange(isLoading);
   }, [isLoading, onLoadingChange]);
+
+  // Report progress
+  useEffect(() => {
+    if (onProgressChange) {
+      onProgressChange(progress);
+    }
+  }, [progress, onProgressChange]);
 
   // Initialize canvas
   useEffect(() => {

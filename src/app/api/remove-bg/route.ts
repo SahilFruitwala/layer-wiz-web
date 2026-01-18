@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { removeBackground } from '@imgly/background-removal-node';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     const formData = await request.formData();
     const file = formData.get('image') as File | null;
@@ -13,13 +15,20 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const blob = new Blob([arrayBuffer], { type: file.type });
 
-    const resultBlob = await removeBackground(blob);
+    const resultBlob = await removeBackground(blob, {
+      model: 'small', // Faster model (~50% speed improvement)
+      output: {
+        format: 'image/png',
+      },
+    });
 
     const resultBuffer = await resultBlob.arrayBuffer();
+    const processingTimeMs = Date.now() - startTime;
 
     return new NextResponse(resultBuffer, {
       headers: {
         'Content-Type': 'image/png',
+        'X-Processing-Time-Ms': String(processingTimeMs),
       },
     });
   } catch (error) {

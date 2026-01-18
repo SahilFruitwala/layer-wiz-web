@@ -9,18 +9,34 @@ export function useBackgroundRemover() {
     setIsLoading(true);
     setError(null);
     try {
-      // Lazy load the library
-      const { removeBackground } = await import('@imgly/background-removal');
+      // Convert to File/Blob for API upload
+      let file: File | Blob;
       
-      const blob = await removeBackground(imageSrc, {
-        progress: (key, current, total) => {
-          // Optional: handle progress
-          const progress = current / total;
-          console.log(`Downloading ${key}: ${Math.round(progress * 100)}%`);
-        },
+      if (typeof imageSrc === 'string') {
+        // Fetch the image from URL/data URL
+        const response = await fetch(imageSrc);
+        const blob = await response.blob();
+        file = new File([blob], 'image.png', { type: blob.type });
+      } else {
+        file = imageSrc;
+      }
+
+      // Use server-side API for faster processing
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/remove-bg', {
+        method: 'POST',
+        body: formData,
       });
 
-      const url = URL.createObjectURL(blob);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Background removal failed');
+      }
+
+      const resultBlob = await response.blob();
+      const url = URL.createObjectURL(resultBlob);
       return url;
     } catch (err) {
       console.error('Background removal failed:', err);

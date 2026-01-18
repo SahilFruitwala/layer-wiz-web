@@ -2,49 +2,26 @@
 
 import React, { useRef, useState } from 'react';
 import EditorCanvas, { EditorCanvasRef } from '@/components/EditorCanvas';
-import RemoveBgCanvas, { RemoveBgCanvasRef } from '@/components/RemoveBgCanvas';
-import { Upload, Type, Download, Loader2, Layers, Scissors, ImagePlus, Eraser, MousePointer2, RotateCcw, RefreshCw, Server, Clock } from 'lucide-react';
-import { BackendType, RemovalResult } from '@/hooks/useApiRemover';
+import ComparisonView from '@/components/ComparisonView';
+import { Upload, Type, Download, Loader2, Layers, Scissors, ImagePlus } from 'lucide-react';
 
 type EditorMode = 'remove-bg' | 'text-behind';
 
 export default function Home() {
   const editorRef = useRef<EditorCanvasRef>(null);
-  const removeBgRef = useRef<RemoveBgCanvasRef>(null);
   const [activeFile, setActiveFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<EditorMode>('remove-bg');
-  
-  // Eraser tool state
-  const [eraserMode, setEraserMode] = useState(false);
-  const [brushSize, setBrushSize] = useState(30);
-  
-  // Backend comparison state
-  const [selectedBackend, setSelectedBackend] = useState<BackendType>('node');
-  const [lastResult, setLastResult] = useState<RemovalResult | null>(null);
-  
-  const handleEraserToggle = (enabled: boolean) => {
-    setEraserMode(enabled);
-    removeBgRef.current?.setEraserMode(enabled);
-  };
-  
-  const handleBrushSizeChange = (size: number) => {
-    setBrushSize(size);
-    removeBgRef.current?.setBrushSize(size);
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setActiveFile(e.target.files[0]);
-      setLastResult(null); // Reset result when new file is uploaded
     }
   };
 
   const handleModeChange = (newMode: EditorMode) => {
     setMode(newMode);
     setActiveFile(null); // Reset file when switching modes
-    setEraserMode(false); // Reset eraser mode when switching
-    setLastResult(null); // Reset result when switching modes
   };
 
   return (
@@ -57,7 +34,8 @@ export default function Home() {
               {mode === 'remove-bg' ? (
                 <>
                   <Scissors className="w-16 h-16 opacity-20" />
-                  <p className="text-lg">Upload an image to remove its background</p>
+                  <p className="text-lg">Upload an image to compare background removal</p>
+                  <p className="text-sm text-neutral-600">Node.js vs Python side-by-side</p>
                 </>
               ) : (
                 <>
@@ -67,13 +45,7 @@ export default function Home() {
               )}
             </div>
           ) : mode === 'remove-bg' ? (
-            <RemoveBgCanvas 
-              ref={removeBgRef} 
-              file={activeFile} 
-              onLoadingChange={setIsLoading}
-              backend={selectedBackend}
-              onResultChange={setLastResult}
-            />
+            <ComparisonView file={activeFile} />
           ) : (
             <EditorCanvas 
               ref={editorRef} 
@@ -158,128 +130,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Section: Backend Selector (only for remove-bg mode) */}
-          {mode === 'remove-bg' && (
-            <div className="space-y-3">
-              <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2">
-                <Server className="w-3.5 h-3.5" />
-                Backend API
-              </h2>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setSelectedBackend('node')}
-                  className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                    selectedBackend === 'node'
-                      ? 'bg-green-600/20 border-green-500 text-green-400'
-                      : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <span className="text-xs font-bold">Node.js</span>
-                  <span className="text-[10px] text-neutral-500">@imgly/bg-removal</span>
-                </button>
-                <button
-                  onClick={() => setSelectedBackend('python')}
-                  className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                    selectedBackend === 'python'
-                      ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400'
-                      : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <span className="text-xs font-bold">Python</span>
-                  <span className="text-[10px] text-neutral-500">InSPyReNet</span>
-                </button>
-              </div>
-              
-              {/* Timing Results */}
-              {lastResult && (
-                <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Clock className="w-4 h-4 text-blue-400" />
-                    <span className="text-neutral-400">Processing Time:</span>
-                    <span className="font-mono text-white font-medium">
-                      {lastResult.timing >= 1000 
-                        ? `${(lastResult.timing / 1000).toFixed(2)}s`
-                        : `${lastResult.timing}ms`
-                      }
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-neutral-500">
-                    Backend: {lastResult.backend === 'node' ? 'Node.js' : 'Python (FastAPI)'}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Section: Eraser Tools (only for remove-bg mode with active file) */}
-          {mode === 'remove-bg' && activeFile && !isLoading && (
-            <div className="space-y-4">
-              <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Eraser Tool</h2>
-              
-              {/* Tool Toggle */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleEraserToggle(false)}
-                  className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                    !eraserMode
-                      ? 'bg-cyan-600/20 border-cyan-500 text-cyan-400'
-                      : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <MousePointer2 className="w-5 h-5" />
-                  <span className="text-xs font-medium">Select</span>
-                </button>
-                <button
-                  onClick={() => handleEraserToggle(true)}
-                  className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                    eraserMode
-                      ? 'bg-red-600/20 border-red-500 text-red-400'
-                      : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <Eraser className="w-5 h-5" />
-                  <span className="text-xs font-medium">Eraser</span>
-                </button>
-              </div>
-
-              {/* Brush Size */}
-              {eraserMode && (
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs text-neutral-400">Brush Size</label>
-                    <span className="text-xs text-neutral-500">{brushSize}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={brushSize}
-                    onChange={(e) => handleBrushSizeChange(parseInt(e.target.value))}
-                    className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-red-500"
-                  />
-                </div>
-              )}
-
-              {/* Undo & Reset */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => removeBgRef.current?.undo()}
-                  className="py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 text-neutral-400 hover:text-white"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span className="text-xs font-medium">Undo</span>
-                </button>
-                <button
-                  onClick={() => removeBgRef.current?.reset()}
-                  className="py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 text-neutral-400 hover:text-white"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span className="text-xs font-medium">Reset</span>
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Section: Text (only for text-behind mode) */}
           {mode === 'text-behind' && (
             <div className="space-y-4">
@@ -351,28 +201,30 @@ export default function Home() {
             </div>
           )}
 
+          {/* Info text for remove-bg mode */}
+          {mode === 'remove-bg' && activeFile && (
+            <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+              <p className="text-sm text-neutral-400">
+                Processing both backends side-by-side. Each result can be downloaded independently.
+              </p>
+            </div>
+          )}
+
         </div>
 
-        <div className="mt-auto pt-6 border-t border-white/10">
-          <button
-            onClick={() => {
-              if (mode === 'remove-bg') {
-                removeBgRef.current?.download();
-              } else {
-                editorRef.current?.download();
-              }
-            }}
-            disabled={!activeFile || isLoading}
-            className={`w-full py-4 text-white rounded-xl font-medium shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 active:translate-y-0 ${
-              mode === 'remove-bg'
-                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-blue-500/25 hover:shadow-blue-500/40'
-                : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-blue-500/25 hover:shadow-blue-500/40'
-            }`}
-          >
-            <Download className="w-4 h-4" />
-            {mode === 'remove-bg' ? 'Download PNG' : 'Export Composition'}
-          </button>
-        </div>
+        {/* Download button - only for text-behind mode */}
+        {mode === 'text-behind' && (
+          <div className="mt-auto pt-6 border-t border-white/10">
+            <button
+              onClick={() => editorRef.current?.download()}
+              disabled={!activeFile || isLoading}
+              className="w-full py-4 text-white rounded-xl font-medium shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 active:translate-y-0 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-blue-500/25 hover:shadow-blue-500/40"
+            >
+              <Download className="w-4 h-4" />
+              Export Composition
+            </button>
+          </div>
+        )}
       </aside>
     </main>
   );

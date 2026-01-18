@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const blob = new Blob([arrayBuffer], { type: file.type });
 
     const resultBlob = await removeBackground(blob, {
-      model: 'small', // Faster model (~50% speed improvement)
+      model: 'medium', // Best quality model (80MB) - higher quality than 'small'
       output: {
         format: 'image/png',
       },

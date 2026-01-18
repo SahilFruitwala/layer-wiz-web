@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState, useCallback } from 'react';
 import * as fabric from 'fabric';
 import { useBackgroundRemover } from '@/hooks/useBackgroundRemover';
+import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 interface RemoveBgCanvasProps {
   file: File | null;
@@ -26,50 +27,19 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [brushSize, setBrushSizeState] = useState(30);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const isPanningRef = useRef(false);
   
   // Store stroke history for undo
   const strokeHistoryRef = useRef<fabric.FabricObject[]>([]);
-  // Store the original image for reset
-  const originalImageRef = useRef<fabric.FabricImage | null>(null);
+  // Store the original image element for high-res download
+  const originalImageRef = useRef<HTMLImageElement | null>(null);
   // Store original dimensions
   const originalDimensionsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
-
-  // Recalculate and apply scaling to fit container
-  const fitToContainer = useCallback(() => {
-    const canvas = canvasInstance.current;
-    const container = containerRef.current;
-    const { width: originalWidth, height: originalHeight } = originalDimensionsRef.current;
-    
-    if (!canvas || !container || originalWidth === 0) return;
-
-    const padding = 16;
-    const containerWidth = container.clientWidth - (padding * 2);
-    const containerHeight = container.clientHeight - (padding * 2);
-    
-    const scale = Math.min(containerWidth / originalWidth, containerHeight / originalHeight);
-    
-    const newWidth = Math.floor(originalWidth * scale);
-    const newHeight = Math.floor(originalHeight * scale);
-    
-    canvas.setDimensions({ width: newWidth, height: newHeight });
-    
-    // Scale all objects
-    canvas.getObjects().forEach((obj) => {
-      if (obj === originalImageRef.current) {
-        obj.set({ 
-          scaleX: scale, 
-          scaleY: scale, 
-          left: 0, 
-          top: 0,
-          originX: 'left',
-          originY: 'top'
-        });
-        obj.setCoords();
-      }
-    });
-    
-    canvas.requestRenderAll();
-  }, []);
+  // Store current scale for download
+  const currentScaleRef = useRef<number>(1);
+  // Store last pan position
+  const lastPanPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Configure eraser brush
   const configureEraserBrush = useCallback((canvas: fabric.Canvas) => {
@@ -79,80 +49,91 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
     canvas.freeDrawingBrush = brush;
   }, [brushSize]);
 
+  // Zoom functions
+  const handleZoom = useCallback((delta: number, point?: { x: number; y: number }) => {
+    const canvas = canvasInstance.current;
+    if (!canvas) return;
+    
+    let newZoom = zoomLevel + delta;
+    newZoom = Math.min(Math.max(0.5, newZoom), 5); // Limit zoom between 0.5x and 5x
+    
+    if (point) {
+      canvas.zoomToPoint(new fabric.Point(point.x, point.y), newZoom);
+    } else {
+      const center = canvas.getVpCenter();
+      canvas.zoomToPoint(center, newZoom);
+    }
+    
+    setZoomLevel(newZoom);
+  }, [zoomLevel]);
+
+  const resetZoom = useCallback(() => {
+    const canvas = canvasInstance.current;
+    if (!canvas) return;
+    
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    setZoomLevel(1);
+  }, []);
+
   useImperativeHandle(ref, () => ({
     download: () => {
       const canvas = canvasInstance.current;
-      if (!canvas) return;
+      const originalImg = originalImageRef.current;
+      if (!canvas || !originalImg) return;
+      
+      const { width, height } = originalDimensionsRef.current;
+      const scale = currentScaleRef.current;
       
       // Create a temporary canvas at original resolution
-      const { width, height } = originalDimensionsRef.current;
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = width;
       tempCanvas.height = height;
       const ctx = tempCanvas.getContext('2d')!;
       
-      // Draw the original image
-      if (originalImageRef.current) {
-        const imgElement = originalImageRef.current.getElement() as HTMLImageElement;
-        ctx.drawImage(imgElement, 0, 0, width, height);
-      }
+      // Draw the original image at full resolution
+      ctx.drawImage(originalImg, 0, 0, width, height);
       
-      // Get current canvas scale
-      const currentScale = canvas.width! / width;
-      
-      // Apply eraser strokes using destination-out
+      // Apply eraser strokes using destination-out, scaled up to original resolution
       ctx.globalCompositeOperation = 'destination-out';
+      
       strokeHistoryRef.current.forEach(stroke => {
-        if (stroke instanceof fabric.Path) {
-          // Scale path back to original size
-          const scaledPath = stroke.path?.map(segment => {
-            if (Array.isArray(segment)) {
-              return segment.map((val, idx) => 
-                idx === 0 ? val : (typeof val === 'number' ? val / currentScale : val)
-              );
-            }
-            return segment;
-          });
-          
-          const originalLeft = (stroke.left || 0) / currentScale;
-          const originalTop = (stroke.top || 0) / currentScale;
-          const originalWidth = (stroke.width || 0) / currentScale;
-          const originalHeight = (stroke.height || 0) / currentScale;
-          
+        if (stroke instanceof fabric.Path && stroke.path) {
           ctx.save();
-          ctx.translate(originalLeft + originalWidth / 2, originalTop + originalHeight / 2);
+          
+          // Scale the stroke from canvas coordinates to original coordinates
+          ctx.scale(1 / scale, 1 / scale);
+          
+          // Path commands are absolute in canvas coordinates, no need to translate
+          // as we are manually drawing the path commands
+          
+          
           ctx.beginPath();
-          
-          scaledPath?.forEach((cmd: unknown) => {
-            const segment = cmd as (string | number)[];
-            if (segment[0] === 'M') {
-              ctx.moveTo(
-                ((segment[1] as number) - originalWidth / 2), 
-                ((segment[2] as number) - originalHeight / 2)
-              );
-            } else if (segment[0] === 'Q') {
-              ctx.quadraticCurveTo(
-                ((segment[1] as number) - originalWidth / 2),
-                ((segment[2] as number) - originalHeight / 2),
-                ((segment[3] as number) - originalWidth / 2),
-                ((segment[4] as number) - originalHeight / 2)
-              );
-            } else if (segment[0] === 'L') {
-              ctx.lineTo(
-                ((segment[1] as number) - originalWidth / 2),
-                ((segment[2] as number) - originalHeight / 2)
-              );
-            }
-          });
-          
-          ctx.lineWidth = (stroke.strokeWidth || brushSize) / currentScale;
+          ctx.lineWidth = (stroke.strokeWidth || brushSize);
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
+          
+          stroke.path.forEach((cmd: unknown) => {
+            const segment = cmd as (string | number)[];
+            if (segment[0] === 'M') {
+              ctx.moveTo(segment[1] as number, segment[2] as number);
+            } else if (segment[0] === 'Q') {
+              ctx.quadraticCurveTo(
+                segment[1] as number,
+                segment[2] as number,
+                segment[3] as number,
+                segment[4] as number
+              );
+            } else if (segment[0] === 'L') {
+              ctx.lineTo(segment[1] as number, segment[2] as number);
+            }
+          });
+          
           ctx.stroke();
           ctx.restore();
         }
       });
       
+      // Download
       const dataURL = tempCanvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = 'background-removed.png';
@@ -246,80 +227,161 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
         canvas.requestRenderAll();
       }
     });
-    
-    // Handle window resize
-    const resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(() => fitToContainer());
+
+    // Handle mouse wheel zoom
+    canvas.on('mouse:wheel', (opt) => {
+      const delta = opt.e.deltaY;
+      const zoomDelta = delta > 0 ? -0.1 : 0.1;
+      const pointer = canvas.getScenePoint(opt.e);
+      
+      let newZoom = canvas.getZoom() + zoomDelta;
+      newZoom = Math.min(Math.max(0.5, newZoom), 5);
+      
+      canvas.zoomToPoint(new fabric.Point(pointer.x, pointer.y), newZoom);
+      setZoomLevel(newZoom);
+      
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
     });
-    resizeObserver.observe(containerRef.current);
+
+    // Handle panning with middle mouse button or alt+left click
+    canvas.on('mouse:down', (opt) => {
+      const evt = opt.e as MouseEvent;
+      if (evt.button === 1 || evt.altKey) {
+        isPanningRef.current = true;
+        canvas.isDrawingMode = false;
+        lastPanPosRef.current = { x: evt.clientX, y: evt.clientY };
+        canvas.setCursor('grab');
+      }
+    });
+
+    canvas.on('mouse:move', (opt) => {
+      if (!isPanningRef.current) return;
+      
+      const evt = opt.e as MouseEvent;
+      const vpt = canvas.viewportTransform;
+      if (!vpt) return;
+      
+      vpt[4] += evt.clientX - lastPanPosRef.current.x;
+      vpt[5] += evt.clientY - lastPanPosRef.current.y;
+      
+      lastPanPosRef.current = { x: evt.clientX, y: evt.clientY };
+      canvas.requestRenderAll();
+    });
+
+    canvas.on('mouse:up', () => {
+      isPanningRef.current = false;
+      canvas.setCursor('default');
+    });
 
     return () => {
-      resizeObserver.disconnect();
       canvas.dispose();
       canvasInstance.current = null;
     };
-  }, [fitToContainer]);
+  }, []); // Empty deps - only run once
 
   // Process uploaded file
   useEffect(() => {
-    if (!file || !canvasInstance.current) return;
+    if (!file || !canvasInstance.current || !containerRef.current) return;
+    
+    const canvas = canvasInstance.current;
+    const container = containerRef.current;
+    let cancelled = false;
     
     // Reset state
     strokeHistoryRef.current = [];
     originalImageRef.current = null;
+    setZoomLevel(1);
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    
+    // Clear canvas
+    canvas.clear();
+    canvas.backgroundColor = 'transparent';
+    
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+    }
     
     const processImage = async () => {
-      const canvas = canvasInstance.current!;
-      
-      // Clear previous content
-      canvas.clear();
-      canvas.backgroundColor = 'transparent';
-      
-      if (resultUrl) {
-        URL.revokeObjectURL(resultUrl);
-      }
-      
       try {
         onLoadingChange(true);
         const cutoutUrl = await removeBackground(file);
-        onLoadingChange(false);
         
+        if (cancelled) return;
+        
+        onLoadingChange(false);
         setResultUrl(cutoutUrl);
         
-        // Load the cutout image into fabric
-        const img = await fabric.FabricImage.fromURL(cutoutUrl);
-        
-        originalDimensionsRef.current = {
-          width: img.width || 800,
-          height: img.height || 600
+        // Load the original image element for high-res download
+        const imgElement = new Image();
+        imgElement.crossOrigin = 'anonymous';
+        imgElement.onload = () => {
+          if (cancelled || !canvasInstance.current) return;
+          
+          originalImageRef.current = imgElement;
+          originalDimensionsRef.current = {
+            width: imgElement.naturalWidth,
+            height: imgElement.naturalHeight
+          };
+          
+          // Calculate scale to fit container
+          const padding = 32;
+          const containerWidth = container.clientWidth - padding;
+          const containerHeight = container.clientHeight - padding;
+          
+          const scale = Math.min(
+            containerWidth / imgElement.naturalWidth,
+            containerHeight / imgElement.naturalHeight,
+            1 // Don't scale up
+          );
+          
+          currentScaleRef.current = scale;
+          
+          // Set canvas to the scaled size
+          const canvasWidth = Math.floor(imgElement.naturalWidth * scale);
+          const canvasHeight = Math.floor(imgElement.naturalHeight * scale);
+          
+          const currentCanvas = canvasInstance.current;
+          if (!currentCanvas) return;
+          
+          currentCanvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+          
+          // Create fabric image at native scale (1:1 with canvas)
+          fabric.FabricImage.fromURL(cutoutUrl).then((fabricImg) => {
+            if (cancelled || !canvasInstance.current) return;
+            
+            fabricImg.set({
+              scaleX: scale,
+              scaleY: scale,
+              selectable: false,
+              evented: false,
+              lockMovementX: true,
+              lockMovementY: true,
+              originX: 'left',
+              originY: 'top',
+              left: 0,
+              top: 0
+            });
+            
+            canvasInstance.current.add(fabricImg);
+            canvasInstance.current.sendObjectToBack(fabricImg);
+            canvasInstance.current.requestRenderAll();
+          });
         };
-        
-        img.set({
-          selectable: false,
-          evented: false,
-          lockMovementX: true,
-          lockMovementY: true,
-          originX: 'left',
-          originY: 'top',
-          left: 0,
-          top: 0
-        });
-        
-        originalImageRef.current = img;
-        canvas.add(img);
-        
-        // Fit to container
-        fitToContainer();
+        imgElement.src = cutoutUrl;
         
       } catch (err) {
-        console.error('Error processing image:', err);
-        onLoadingChange(false);
+        if (!cancelled) {
+          console.error('Error processing image:', err);
+          onLoadingChange(false);
+        }
       }
     };
 
     processImage();
     
     return () => {
+      cancelled = true;
       if (resultUrl) {
         URL.revokeObjectURL(resultUrl);
       }
@@ -330,7 +392,7 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   return (
     <div 
       ref={containerRef} 
-      className="w-full h-full flex items-center justify-center p-4 relative"
+      className="w-full h-full flex items-center justify-center p-4 relative overflow-hidden"
     >
       {/* Checkerboard background */}
       <div 
@@ -346,7 +408,50 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
           backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
         }}
       />
-      <canvas ref={canvasEl} className="relative z-10" />
+      
+      {/* Canvas */}
+      <canvas 
+        ref={canvasEl}
+        className="relative z-10"
+      />
+      
+      {/* Zoom Controls */}
+      {resultUrl && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-2 border border-white/10">
+          <button
+            onClick={() => handleZoom(-0.25)}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <span className="text-xs text-white font-mono min-w-[3rem] text-center">
+            {Math.round(zoomLevel * 100)}%
+          </span>
+          <button
+            onClick={() => handleZoom(0.25)}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-white/20" />
+          <button
+            onClick={resetZoom}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white"
+            title="Reset Zoom"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      
+      {/* Zoom hint */}
+      {resultUrl && zoomLevel === 1 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-xs text-neutral-400 bg-black/50 px-3 py-1.5 rounded-full">
+          Scroll to zoom • Alt+drag to pan
+        </div>
+      )}
     </div>
   );
 });

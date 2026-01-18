@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react';
 import EditorCanvas, { EditorCanvasRef } from '@/components/EditorCanvas';
 import RemoveBgCanvas, { RemoveBgCanvasRef } from '@/components/RemoveBgCanvas';
+import BulkImageProcessor from '@/components/BulkImageProcessor';
 import { Upload, Type, Download, Loader2, Layers, Scissors, ImagePlus, Eraser, MousePointer2, RotateCcw, RefreshCw } from 'lucide-react';
 
 type EditorMode = 'remove-bg' | 'text-behind';
@@ -10,6 +11,7 @@ type EditorMode = 'remove-bg' | 'text-behind';
 export default function Home() {
   const editorRef = useRef<EditorCanvasRef>(null);
   const removeBgRef = useRef<RemoveBgCanvasRef>(null);
+  const [activeFiles, setActiveFiles] = useState<File[]>([]);
   const [activeFile, setActiveFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -30,14 +32,22 @@ export default function Home() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setActiveFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      setActiveFiles(files);
+      
+      if (files.length === 1) {
+        setActiveFile(files[0]);
+      } else {
+        setActiveFile(null); // Bulk mode doesn't use activeFile
+      }
     }
   };
 
   const handleModeChange = (newMode: EditorMode) => {
     setMode(newMode);
     setActiveFile(null);
+    setActiveFiles([]);
     setEraserMode(false);
   };
 
@@ -46,7 +56,7 @@ export default function Home() {
       {/* Main Canvas Area */}
       <div className="flex-grow relative bg-neutral-900/50 flex items-center justify-center p-8">
         <div className="relative w-full h-full max-w-6xl max-h-[80vh] shadow-2xl rounded-lg overflow-hidden border border-white/10 bg-[#1a1a1a]">
-          {!activeFile ? (
+          {!activeFile && activeFiles.length <= 1 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 gap-4">
               {mode === 'remove-bg' ? (
                 <>
@@ -61,6 +71,14 @@ export default function Home() {
                 </>
               )}
             </div>
+          ) : activeFiles.length > 1 && mode === 'remove-bg' ? (
+            <BulkImageProcessor 
+              files={activeFiles}
+              onBack={() => {
+                setActiveFiles([]);
+                setActiveFile(null);
+              }}
+            />
           ) : mode === 'remove-bg' ? (
             <RemoveBgCanvas 
               ref={removeBgRef} 
@@ -173,6 +191,7 @@ export default function Home() {
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               />
@@ -181,7 +200,7 @@ export default function Home() {
                   <Upload className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <span className="block font-medium text-sm">Upload Photo</span>
+                  <span className="block font-medium text-sm">Upload Photo(s)</span>
                   <span className="block text-xs text-neutral-500">JPG, PNG, WebP</span>
                 </div>
               </button>

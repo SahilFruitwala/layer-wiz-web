@@ -51,11 +51,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div 
-          className="w-full max-w-lg bg-neutral-950 border border-white/10 rounded-3xl shadow-2xl shadow-black/50 animate-scale-in overflow-hidden"
+          className="w-full max-w-lg bg-neutral-950 border border-white/10 rounded-3xl shadow-2xl shadow-black/50 animate-scale-in overflow-hidden flex flex-col max-h-[85vh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-white/10">
+          <div className="flex items-center justify-between p-6 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-xl flex items-center justify-center">
                 <Settings className="w-5 h-5 text-blue-400" />
@@ -74,7 +74,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
             {/* Info Banner */}
             <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
               <h3 className="text-sm font-semibold text-blue-400 mb-2 flex items-center gap-2">

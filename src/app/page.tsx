@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useRef, useState } from 'react';
 import EditorCanvas, { EditorCanvasRef } from '@/components/EditorCanvas';
 import RemoveBgCanvas, { RemoveBgCanvasRef } from '@/components/RemoveBgCanvas';

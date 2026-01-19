@@ -326,7 +326,7 @@ export default function Home() {
 
             {/* Legacy Editor Text Controls */}
             {mode === 'text-behind' && (
-                <div className="space-y-4">
+                <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Legacy Text</h2>
                 <button
                     onClick={() => editorRef.current?.addText()}
@@ -341,11 +341,57 @@ export default function Home() {
                     <span className="block text-xs text-neutral-500">Insert behind subject</span>
                     </div>
                 </button>
-                 <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                    <p className="text-xs text-yellow-500">
-                        Tip: Try the "Remove BG" mode for the new Advanced Layering features including Text Behind!
-                    </p>
-                 </div>
+
+                <div className="space-y-3 pt-2">
+                    <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Text Style</h3>
+                    
+                    {/* Font Family */}
+                    <div className="space-y-1.5">
+                    <label className="text-xs text-neutral-400">Font</label>
+                    <select
+                        onChange={(e) => editorRef.current?.updateTextStyle('fontFamily', e.target.value)}
+                        className="w-full py-2 px-3 bg-neutral-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        defaultValue="Arial Black, Arial, sans-serif"
+                    >
+                        <option value="Arial Black, Arial, sans-serif">Arial Black</option>
+                        <option value="Impact, sans-serif">Impact</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="Courier New, monospace">Courier New</option>
+                        <option value="Comic Sans MS, cursive">Comic Sans</option>
+                        <option value="Verdana, sans-serif">Verdana</option>
+                        <option value="Times New Roman, serif">Times New Roman</option>
+                    </select>
+                    </div>
+
+                    {/* Font Size */}
+                    <div className="space-y-1.5">
+                    <label className="text-xs text-neutral-400">Size</label>
+                    <input
+                        type="range"
+                        min="20"
+                        max="200"
+                        defaultValue="50"
+                        onChange={(e) => editorRef.current?.updateTextStyle('fontSize', parseInt(e.target.value))}
+                        className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                    </div>
+
+                    {/* Color Picker */}
+                    <div className="space-y-1.5">
+                    <label className="text-xs text-neutral-400">Color</label>
+                    <div className="flex flex-wrap gap-2">
+                        {['#ffffff', '#000000', '#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da', '#fcbad3', '#a8d5e2', '#f9f871'].map((color) => (
+                        <button
+                            key={color}
+                            onClick={() => editorRef.current?.updateTextStyle('fill', color)}
+                            className="w-7 h-7 rounded-lg border-2 border-white/20 hover:border-white/50 transition-colors hover:scale-110"
+                            style={{ backgroundColor: color }}
+                            title={color}
+                        />
+                        ))}
+                    </div>
+                    </div>
+                </div>
                 </div>
             )}
         </div>

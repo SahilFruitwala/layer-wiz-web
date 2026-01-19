@@ -43,11 +43,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: imageUrl });
 
-  } catch (error: any) {
-    console.error('AI Generation Error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal Server Error' },
-      { status: 500 }
-    );
-  }
+      } catch (error: unknown) {
+        console.error('AI Generation Error:', error);
+        return NextResponse.json(
+          { error: (error as Error).message || 'Internal Server Error' },
+          { status: 500 }
+        );
+      }
 }

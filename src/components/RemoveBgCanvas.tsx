@@ -244,7 +244,8 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
                originX: 'left',
                originY: 'top'
            });
-           (rect as any).isBackground = true;
+// @ts-expect-error - Custom property
+           (rect as fabric.Object).isBackground = true;
 
            // Helper parsing logic
            let coords = { x1: 0, y1: 0, x2: 0, y2: 0 };
@@ -302,7 +303,8 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
                  left: bgCanvas.width! / 2, top: bgCanvas.height! / 2,
                  selectable: false, evented: false
              });
-             (img as any).isBackground = true;
+             // @ts-expect-error
+             (img as fabric.Object).isBackground = true;
              bgCanvas.add(img);
              bgCanvas.sendObjectToBack(img);
              bgCanvas.requestRenderAll();

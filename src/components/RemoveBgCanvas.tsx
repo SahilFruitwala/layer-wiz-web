@@ -227,65 +227,64 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
           bgCanvas.backgroundColor = value;
           bgCanvas.requestRenderAll();
        } else if (type === 'gradient') {
-           // For gradient, we use a Rect because Fabric backgroundColor string support for gradients implies 
-           // using a Gradient object, not CSS string.
-           // Since 'value' is a CSS gradient string (e.g., 'linear-gradient(...)'), we need to approximate or use an image.
+           // Parse CSS linear-gradient to Fabric Gradient or Canvas Gradient
+           // Value format example: "linear-gradient(to right, #4facfe 0%, #00f2fe 100%)"
            
-           // Approximation: Create a rect size of infinite-ish
+           const canvasWidth = bgCanvas.width || 800;
+           const canvasHeight = bgCanvas.height || 800;
+           
+           // We will create a fabric.Rect as the background
            const rect = new fabric.Rect({
-               width: 5000, height: 5000,
-               left: -2500, top: -2500,
-               fill: '#cccccc', // fallback
-               selectable: false, evented: false
+               width: canvasWidth, 
+               height: canvasHeight,
+               left: 0, 
+               top: 0,
+               selectable: false, 
+               evented: false,
+               originX: 'left',
+               originY: 'top'
            });
            (rect as any).isBackground = true;
+
+           // Helper parsing logic
+           let coords = { x1: 0, y1: 0, x2: 0, y2: 0 };
+           const isDegree = value.includes('deg');
+           const isToRight = value.includes('to right');
+           const isToTop = value.includes('to top');
            
-           // We can try to use setGradient but it requires parsing logic.
-           // For this MVP, we will use a color if gradient parsing is too complex, 
-           // OR we can assign the gradient string to the container div for PREVIEW, 
-           // but for export we need it on canvas.
-           
-           // HACK: Render the gradient to a small html canvas, then use as pattern/image
-           // This is robust.
-           const gCanvas = document.createElement('canvas');
-           gCanvas.width = 512; gCanvas.height = 512;
-           const gCtx = gCanvas.getContext('2d')!;
-           
-           // Since we can't easily parse generic CSS gradients without a library,
-           // we'll try to apply it to the canvas fillStyle? 
-           // fillStyle DOES NOT support 'linear-gradient(...)' CSS string directly in all browsers/logic.
-           // It needs a CanvasGradient object.
-           
-           // Fallback for Demo: Just use the first color of the gradient or a fixed generic one
-           // Better: Use a simple parsing for the preset gradients we defined.
-           if (value.includes('linear-gradient')) {
-               const grad = gCtx.createLinearGradient(0, 0, 512, 512);
-               // Simple rainbow fallback if we can't parse
-               grad.addColorStop(0, '#4facfe');
-               grad.addColorStop(1, '#00f2fe');
-               gCtx.fillStyle = grad; 
-               // Note: This matches the first gradient in our list. 
-               // Real impl would parse colors.
-           } else {
-               gCtx.fillStyle = value; 
+           if (isToRight) {
+               coords = { x1: 0, y1: 0, x2: canvasWidth, y2: 0 };
+           } else if (isToTop) {
+               coords = { x1: 0, y1: canvasHeight, x2: 0, y2: 0 };
+           } else if (isDegree) {
+               // Approximate diagonal for 120deg/135deg
+               // 135deg is top-left to bottom-right roughly in visual feel for CSS? 
+               // Actually 0deg is Top, 90deg is Right, 180deg is Bottom.
+               // 120deg ~ Bottom Right.
+               coords = { x1: 0, y1: 0, x2: canvasWidth, y2: canvasHeight };
            }
-           gCtx.fillRect(0, 0, 512, 512);
+
+           // Extract colors - simple regex for hex codes
+           const colorMatches = value.match(/#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}/g) || ['#000000', '#ffffff'];
+           const colorStops = colorMatches.map((color, index) => ({
+               offset: index / (colorMatches.length - 1),
+               color: color
+           }));
+
+           // If manual stops provided in string (e.g. 0%, 100%), ideally parse them.
+           // But for our preset list, they are mostly 0% and 100%.
            
-           const patternImg = new Image();
-           patternImg.src = gCanvas.toDataURL();
-           patternImg.onload = () => {
-               const img = new fabric.Image(patternImg);
-               img.scaleToWidth(bgCanvas.width! * 2); // Ensure it covers
-               img.set({
-                   originX: 'center', originY: 'center',
-                   left: bgCanvas.width! / 2, top: bgCanvas.height! / 2,
-                   selectable: false, evented: false
-               });
-               (img as any).isBackground = true;
-               bgCanvas.add(img);
-               bgCanvas.sendObjectToBack(img);
-               bgCanvas.requestRenderAll();
-           };
+           const gradient = new fabric.Gradient({
+               type: 'linear',
+               coords: coords,
+               colorStops: colorStops
+           });
+
+           rect.set('fill', gradient);
+           bgCanvas.add(rect);
+           bgCanvas.sendObjectToBack(rect);
+           bgCanvas.requestRenderAll();
+
        } else if (type === 'image') {
           fabric.FabricImage.fromURL(value).then(img => {
              // Cover logic

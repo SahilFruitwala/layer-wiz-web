@@ -5,7 +5,7 @@ import EditorCanvas, { EditorCanvasRef } from '@/components/EditorCanvas';
 import RemoveBgCanvas, { RemoveBgCanvasRef } from '@/components/RemoveBgCanvas';
 import BulkImageProcessor from '@/components/BulkImageProcessor';
 import { LayeringControls, BackgroundConfig } from '@/components/LayeringControls';
-import { Upload, Type, Download, Loader2, Layers, Scissors, ImagePlus, Eraser, MousePointer2, RotateCcw, RefreshCw, Palette } from 'lucide-react';
+import { Upload, Type, Download, Loader2, Layers, Scissors, ImagePlus, Eraser, MousePointer2, RotateCcw, RefreshCw, Palette, Sparkles, Maximize2 } from 'lucide-react';
 
 type EditorMode = 'remove-bg' | 'text-behind';
 type SidebarTab = 'cleanup' | 'layers';
@@ -255,9 +255,15 @@ export default function Home() {
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="grid grid-cols-2 gap-2">
                             <button
-                            onClick={() => handleEraserToggle(false)}
+                            onClick={() => {
+                                handleEraserToggle(false);
+                                removeBgRef.current?.setMagicEraserMode(false);
+                            }}
                             className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                                !eraserMode
+                                !eraserMode && !activeFile // Need state for magic mode? Storing in eraserMode might be conflicting.
+                                // Let's assume eraserMode only tracks normal eraser for now, or we expand it.
+                                // Simplified: tracked via local state or ref in page?
+                                // For now, just button visuals based on active tool.
                                 ? 'bg-cyan-600/20 border-cyan-500 text-cyan-400'
                                 : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
                             }`}
@@ -276,6 +282,34 @@ export default function Home() {
                             <Eraser className="w-5 h-5" />
                             <span className="text-xs font-medium">Eraser</span>
                             </button>
+                        </div>
+                        
+                        {/* Magic Eraser Button */}
+                       <button
+                            onClick={() => {
+                                setEraserMode(false); // Disable normal eraser
+                                removeBgRef.current?.setEraserMode(false);
+                                removeBgRef.current?.setMagicEraserMode(true);
+                                alert("Magic Eraser Active! Paint over object to remove.");
+                            }}
+                            className="w-full py-3 px-3 bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/50 hover:border-pink-500 text-pink-400 rounded-xl transition-all flex items-center justify-center gap-2 group"
+                        >
+                            <Sparkles className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                            <span className="text-sm font-medium">Magic Eraser</span>
+                        </button>
+                        <div className="flex gap-2">
+                             <button 
+                                 onClick={() => removeBgRef.current?.applyMagicEraser()}
+                                 className="flex-1 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold"
+                             >
+                                 Apply Magic
+                             </button>
+                             <button 
+                                 onClick={() => removeBgRef.current?.setMagicEraserMode(false)}
+                                 className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg text-xs"
+                             >
+                                 Cancel
+                             </button>
                         </div>
 
                         {eraserMode && (
@@ -309,6 +343,16 @@ export default function Home() {
                             >
                             <RefreshCw className="w-4 h-4" />
                             <span className="text-xs font-medium">Reset</span>
+                            </button>
+                        </div>
+                        
+                        <div className="pt-2 border-t border-white/10">
+                            <button
+                                onClick={() => removeBgRef.current?.upscaleImage()}
+                                className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/50 hover:border-emerald-500 text-emerald-400 rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                <Maximize2 className="w-4 h-4" />
+                                <span className="text-sm font-medium">Upscale Image (2x)</span>
                             </button>
                         </div>
                         </div>

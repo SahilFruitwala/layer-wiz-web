@@ -11,9 +11,12 @@ interface RemoveBgCanvasProps {
   onProgressChange?: (progress: number) => void;
 }
 
-export interface RemoveBgCanvasRef {
+  export interface RemoveBgCanvasRef {
   download: () => Promise<void>;
   setEraserMode: (enabled: boolean) => void;
+  setMagicEraserMode: (enabled: boolean) => void;
+  applyMagicEraser: () => Promise<void>;
+  upscaleImage: () => Promise<void>;
   setBrushSize: (size: number) => void;
   undo: () => void;
   reset: () => void;
@@ -32,10 +35,14 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [brushSize, setBrushSizeState] = useState(30);
   const [zoomLevel, setZoomLevel] = useState(1);
+  
   const isPanningRef = useRef(false);
+  const magicEraserModeRef = useRef(false);
   
   // Store stroke history for undo
   const strokeHistoryRef = useRef<fabric.FabricObject[]>([]);
+  const magicStrokeHistoryRef = useRef<fabric.FabricObject[]>([]);
+
   // Store the original image element for high-res download
   const originalImageRef = useRef<HTMLImageElement | null>(null);
   // Store original dimensions
@@ -49,7 +56,11 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   const configureEraserBrush = useCallback((canvas: fabric.Canvas) => {
     const brush = new fabric.PencilBrush(canvas);
     brush.width = brushSize;
-    brush.color = 'rgba(0,0,0,1)';
+    if (magicEraserModeRef.current) {
+        brush.color = 'rgba(255, 0, 100, 0.5)'; // Magic Visual
+    } else {
+        brush.color = 'rgba(0,0,0,1)';
+    }
     canvas.freeDrawingBrush = brush;
   }, [brushSize]);
 
@@ -97,6 +108,175 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   }, [syncBackgroundCanvas]);
 
   useImperativeHandle(ref, () => ({
+    setMagicEraserMode: (enabled: boolean) => {
+        const canvas = canvasInstance.current;
+        if (!canvas) return;
+        magicEraserModeRef.current = enabled;
+        canvas.isDrawingMode = enabled; // Both normal and magic need drawing mode? No, pass enable from parent.
+        // Parent controls isDrawingMode, we just switch brush style/logic
+        configureEraserBrush(canvas);
+    },
+    
+    applyMagicEraser: async () => {
+        const canvas = canvasInstance.current;
+        const originalImg = originalImageRef.current;
+        if (!canvas || !originalImg || magicStrokeHistoryRef.current.length === 0) return;
+
+        try {
+            onLoadingChange(true);
+            
+            // 1. Generate Mask (Original Size)
+            const { width, height } = originalDimensionsRef.current;
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = width;
+            maskCanvas.height = height;
+            const ctx = maskCanvas.getContext('2d')!;
+            
+            // Fill black
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw strokes in white
+            // Need to handle scaling from canvas coords to original image coords
+            const scale = currentScaleRef.current; // Current display scale of the image object
+            
+            magicStrokeHistoryRef.current.forEach(stroke => {
+                if (stroke instanceof fabric.Path && stroke.path) {
+                    ctx.save();
+                    ctx.scale(1/scale, 1/scale); // Transform canvas coord to original
+                    ctx.beginPath();
+                    ctx.lineWidth = stroke.strokeWidth || brushSize;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeStyle = 'white';
+                    
+                    // @ts-expect-error - Custom iterator
+                    stroke.path.forEach((cmd: any) => {
+                        const segment = cmd as (string | number)[];
+                        if (segment[0] === 'M') ctx.moveTo(segment[1] as number, segment[2] as number);
+                        if (segment[0] === 'Q') ctx.quadraticCurveTo(segment[1] as number, segment[2] as number, segment[3] as number, segment[4] as number);
+                        if (segment[0] === 'L') ctx.lineTo(segment[1] as number, segment[2] as number);
+                    });
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            });
+
+            const maskData = maskCanvas.toDataURL('image/png');
+            
+            // 2. Get Current Foreground Image (as base)
+            // Ideally we use the full res composite.
+            // For simplicity, we can use the originalUrl if we haven't done other edits, 
+            // OR we need to snapshot the current state (minus magic strokes).
+            // Let's use the original cutout result (resultUrl) as base if available, or the originalImage?
+            // "Object Removal" from *Foreground*? Or original?
+            // Assuming removing from CUTOUT.
+            
+            // Snapshot current FG (without magic strokes)
+            // Hide magic strokes
+            magicStrokeHistoryRef.current.forEach(s => s.set('visible', false));
+            canvas.requestRenderAll();
+            
+            // We need a full res version of the current FG. 
+            // Reuse download logic-ish but for internal processing. 
+            // Actually, let's just use the current canvas visual (lower res) or original?
+            // High Quality: Use the original Cutout URL.
+            // But we might have erased parts manually? 
+            // Let's stick to: Remove object from the *Original Image* or the *Cutout*?
+            // If we remove from Cutout, we send Cutout + Mask.
+            
+            // Let's send the original cutout result. 
+            // (Ignoring manual eraser strokes for now to keep it simple, or we'd need to composite them).
+            
+            // TODO: Proper composition if mixing tools. For now, using resultUrl (clean cutout).
+            const imageToEdit = resultUrl; 
+
+            // 3. Call API
+            const res = await fetch('/api/magic-erase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: imageToEdit, 
+                    mask: maskData,
+                    prompt: "remove object"
+                })
+            });
+            
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            
+            // 4. Update Canvas with New Image
+            const newUrl = data.url;
+            setResultUrl(newUrl); // Update state
+            
+            // Reload Main Image
+            fabric.FabricImage.fromURL(newUrl).then(img => {
+                // Find old main image
+                const oldImg = canvas.getObjects().find((o: any) => o.isMainImage);
+                if(oldImg) canvas.remove(oldImg);
+                
+                // Configure new
+                 img.scaleToWidth(canvas.width!);
+                (img as any).isMainImage = true;
+                img.set({
+                    selectable: false, evented: false
+                });
+                
+                // Reset history
+                strokeHistoryRef.current = []; // Reset normal eraser too? debatable.
+                magicStrokeHistoryRef.current = [];
+                canvas.remove(...magicStrokeHistoryRef.current); // Clear red strokes
+                 
+                 canvas.add(img);
+                 canvas.sendObjectToBack(img);
+                 canvas.requestRenderAll();
+            });
+
+        } catch (e) {
+            console.error(e);
+            alert("Magic Eraser failed");
+        } finally {
+            onLoadingChange(false);
+             // Clear magic strokes from view
+            magicStrokeHistoryRef.current.forEach(stroke => canvas.remove(stroke));
+            magicStrokeHistoryRef.current = [];
+        }
+    },
+
+    upscaleImage: async () => {
+         const originalImg = originalImageRef.current;
+         if (!originalImg) return;
+         try {
+             onLoadingChange(true);
+             // Use original image src 
+             const imageSrc = originalImg.src; 
+             
+             const res = await fetch('/api/upscale', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageSrc, scale: 2 })
+             });
+             const data = await res.json();
+             if (data.error) throw new Error(data.error);
+             
+             // Trigger download of upscaled result
+             const link = document.createElement('a');
+             link.download = 'upscaled-image.png';
+             link.href = data.url;
+             document.body.appendChild(link);
+             link.click();
+             document.body.removeChild(link);
+             
+             alert("Upscaled image downloaded!");
+             
+         } catch (e) {
+             console.error(e);
+             alert("Upscale failed");
+         } finally {
+             onLoadingChange(false);
+         }
+    },
+
     download: async () => {
       const canvas = canvasInstance.current;
       const bgCanvas = bgCanvasInstance.current;
@@ -303,7 +483,7 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
                  left: bgCanvas.width! / 2, top: bgCanvas.height! / 2,
                  selectable: false, evented: false
              });
-             // @ts-expect-error
+             // @ts-expect-error - Custom property
              (img as fabric.Object).isBackground = true;
              bgCanvas.add(img);
              bgCanvas.sendObjectToBack(img);

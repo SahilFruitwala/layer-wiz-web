@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LayerWiz 🧙
 
-## Getting Started
+AI-powered image editing tool with background removal and text-behind-subject effects.
 
-First, run the development server:
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/layer-wiz.git
+cd layer-wiz
+./start.sh
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+That's it! The script automatically:
+- Installs Node.js dependencies (using bun or npm)
+- Sets up Python virtual environment
+- Installs Python dependencies (PyTorch, BiRefNet model)
+- Starts both frontend and backend servers
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Once running:
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Press `Ctrl+C` to stop all servers.
 
-## Learn More
+## Requirements
 
-To learn more about Next.js, take a look at the following resources:
+- **Node.js** 18+ (with npm or bun)
+- **Python** 3.9+
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- 🎨 **Remove Background** - AI-powered background removal using BiRefNet
+- ✏️ **Manual Touch-up** - Brush tools to refine edges
+- 📝 **Text Behind Subject** - Add text that appears behind the subject
+- 📦 **Bulk Processing** - Process multiple images at once
+- ⬇️ **Download** - Export as high-quality PNG
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+layer-wiz/
+├── src/                    # Next.js frontend
+│   ├── app/               # App router pages
+│   ├── components/        # React components
+│   └── hooks/             # Custom hooks
+├── backend/               # Python FastAPI backend
+│   ├── main.py           # API endpoints
+│   └── requirements.txt  # Python dependencies
+├── start.sh              # One-command start script
+└── setup.sh              # Setup only (optional)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## AI Features (Optional)
+
+LayerWiz includes optional AI-powered features:
+
+- **Smart Suggest** - Analyzes your image and suggests creative backgrounds
+- **AI Background Generation** - Creates custom backgrounds from text prompts
+
+To enable these features:
+1. Click the ⚙️ **Settings** button in the app
+2. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
+3. Paste your key and select a model
+
+> **Note:** All other features (background removal, manual editing, text layers) work without an API key.
+
+## Manual Setup
+
+If you prefer to run things separately:
+
+```bash
+# Terminal 1: Frontend
+npm install
+npm run dev
+
+# Terminal 2: Backend
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+## License
+
+MIT

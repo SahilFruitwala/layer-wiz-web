@@ -10,6 +10,7 @@ import {
   Eraser, MousePointer2, RotateCcw, RefreshCw, Palette, Sparkles, 
   ChevronUp, ChevronDown, X, Wand2
 } from 'lucide-react';
+import { SettingsButton } from '@/components/SettingsModal';
 
 type EditorMode = 'remove-bg' | 'text-behind';
 type SidebarTab = 'cleanup' | 'layers';
@@ -81,18 +82,21 @@ export default function Home() {
   };
 
   // Sidebar content (shared between desktop and mobile)
-  const SidebarContent = () => (
+  const renderSidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="p-5 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 animate-pulse-glow">
-            <Wand2 className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 animate-pulse-glow">
+              <Wand2 className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-white/80 bg-clip-text">LayerWiz</h1>
+              <p className="text-[11px] text-neutral-500 font-medium">AI-Powered Image Editor</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-white/80 bg-clip-text">LayerWiz</h1>
-            <p className="text-[11px] text-neutral-500 font-medium">AI-Powered Image Editor</p>
-          </div>
+          <SettingsButton />
         </div>
       </div>
 
@@ -167,7 +171,7 @@ export default function Home() {
 
         {/* Editor Controls */}
         {mode === 'remove-bg' && activeFile && (
-          <div className="space-y-4 animate-scale-in">
+          <div className="space-y-4">
             {/* Prep Phase Header */}
             {isPrepPhase && (
               <div className="p-4 bg-gradient-to-br from-blue-600/10 to-cyan-600/10 border border-blue-500/20 rounded-2xl space-y-3">
@@ -221,7 +225,7 @@ export default function Home() {
             </div>
 
             {sidebarTab === 'cleanup' ? (
-              <div className="space-y-4 animate-fade-in">
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => handleEraserToggle(false)}
@@ -287,7 +291,7 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="animate-fade-in">
+              <div>
                 <LayeringControls 
                   currentBackground={currentBackground}
                   onBackgroundChange={handleBackgroundChange}
@@ -517,7 +521,7 @@ export default function Home() {
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-80 xl:w-96 bg-neutral-950/95 backdrop-blur-xl border-l border-white/10 flex-col z-10 shrink-0">
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
 
       {/* Mobile Bottom Sheet Toggle */}
@@ -541,7 +545,7 @@ export default function Home() {
       >
         <div className="bottom-sheet-handle"></div>
         <div className="h-full overflow-hidden" style={{ maxHeight: 'calc(75vh - 28px)' }}>
-          <SidebarContent />
+          {renderSidebarContent()}
         </div>
       </div>
 

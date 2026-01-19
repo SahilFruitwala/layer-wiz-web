@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Image as ImageIcon, Type, Upload, Sparkles, Loader2, Search, Bold, Italic, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Palette, Image as ImageIcon, Type, Upload, Sparkles, Loader2, Search, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Settings } from 'lucide-react';
 import { TextOptions } from './RemoveBgCanvas';
+import { useGeminiConfig } from '@/contexts/GeminiContext';
 
 export type BackgroundType = 'transparent' | 'color' | 'gradient' | 'image';
 
@@ -57,6 +58,9 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
   const [unsplashImages, setUnsplashImages] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Get Gemini config from context
+  const { config: geminiConfig, isConfigured: isGeminiConfigured } = useGeminiConfig();
+
   useEffect(() => {
     if (activeTab === 'image' && unsplashImages.length === 0) {
       fetchUnsplash('');
@@ -89,11 +93,15 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
 
   const handleGenerateBg = async () => {
     if (!prompt.trim()) return;
+    if (!isGeminiConfigured) {
+      alert('Please configure your Gemini API key in Settings to use AI features.');
+      return;
+    }
     setIsGenerating(true);
     try {
       const res = await fetch('/api/generate-bg', {
         method: 'POST',
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, apiKey: geminiConfig.apiKey }),
         headers: { 'Content-Type': 'application/json' }
       });
       const data = await res.json();
@@ -101,7 +109,6 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
         onBackgroundChange({ type: 'image', value: data.url });
       } else if (data.mock && data.url) {
         onBackgroundChange({ type: 'image', value: data.url });
-        alert("Gemini/OpenAI Key missing. Used mock image.");
       } else {
         alert(data.error || "Failed to generate");
       }
@@ -147,7 +154,7 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar animate-fade-in">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {activeTab === 'color' && (
           <div className="grid grid-cols-4 gap-2">
             {/* Transparent option */}
@@ -270,6 +277,10 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
                     alert("Please upload an image first for smart analysis!");
                     return;
                   }
+                  if (!isGeminiConfigured) {
+                    alert('Please configure your Gemini API key in Settings to use Smart Suggest.');
+                    return;
+                  }
                   try {
                     setIsGenerating(true);
                     const reader = new FileReader();
@@ -279,7 +290,11 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
                       const res = await fetch('/api/analyze-image', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ image: base64data })
+                        body: JSON.stringify({ 
+                          image: base64data,
+                          apiKey: geminiConfig.apiKey,
+                          model: geminiConfig.model
+                        })
                       });
                       const data = await res.json();
                       if(data.suggestion) {
@@ -318,11 +333,22 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
               )}
             </button>
             
-            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-              <p className="text-xs text-blue-400 leading-relaxed">
-                <strong>Pro tip:</strong> Be specific about lighting, mood, and style. Imagen 4.0 creates high-quality backgrounds instantly.
-              </p>
-            </div>
+            {isGeminiConfigured ? (
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                <p className="text-xs text-blue-400 leading-relaxed">
+                  <strong>Pro tip:</strong> Be specific about lighting, mood, and style. Imagen 4.0 creates high-quality backgrounds instantly.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <p className="text-xs text-amber-400 leading-relaxed flex items-start gap-2">
+                  <Settings className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>API Key Required:</strong> Configure your free Gemini API key in Settings to enable AI features.
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         )}
 

@@ -9,22 +9,26 @@ interface RemoveBgCanvasProps {
   file: File | null;
   onLoadingChange: (loading: boolean) => void;
   onProgressChange?: (progress: number) => void;
+  isPrepMode?: boolean;
 }
 
-  export interface RemoveBgCanvasRef {
+export interface RemoveBgCanvasRef {
   download: () => Promise<void>;
   setEraserMode: (enabled: boolean) => void;
-  setMagicEraserMode: (enabled: boolean) => void;
-  applyMagicEraser: () => Promise<void>;
-  upscaleImage: () => Promise<void>;
   setBrushSize: (size: number) => void;
   undo: () => void;
   reset: () => void;
   setBackground: (type: string, value: string) => void;
   addText: () => void;
+  triggerRemoveBackground: () => Promise<void>;
 }
 
-const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ file, onLoadingChange, onProgressChange }, ref) => {
+const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ 
+  file, 
+  onLoadingChange, 
+  onProgressChange,
+  isPrepMode = false
+}, ref) => {
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const bgCanvasEl = useRef<HTMLCanvasElement>(null);
   const canvasInstance = useRef<fabric.Canvas | null>(null); // Foreground (Subject + Eraser)
@@ -37,11 +41,10 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   const [zoomLevel, setZoomLevel] = useState(1);
   
   const isPanningRef = useRef(false);
-  const magicEraserModeRef = useRef(false);
   
   // Store stroke history for undo
   const strokeHistoryRef = useRef<fabric.FabricObject[]>([]);
-  const magicStrokeHistoryRef = useRef<fabric.FabricObject[]>([]);
+
 
   // Store the original image element for high-res download
   const originalImageRef = useRef<HTMLImageElement | null>(null);
@@ -53,14 +56,11 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   const lastPanPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Configure eraser brush
+  // Configure eraser brush
   const configureEraserBrush = useCallback((canvas: fabric.Canvas) => {
     const brush = new fabric.PencilBrush(canvas);
     brush.width = brushSize;
-    if (magicEraserModeRef.current) {
-        brush.color = 'rgba(255, 0, 100, 0.5)'; // Magic Visual
-    } else {
-        brush.color = 'rgba(0,0,0,1)';
-    }
+    brush.color = 'rgba(0,0,0,1)';
     canvas.freeDrawingBrush = brush;
   }, [brushSize]);
 
@@ -108,180 +108,14 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
   }, [syncBackgroundCanvas]);
 
   useImperativeHandle(ref, () => ({
-    setMagicEraserMode: (enabled: boolean) => {
-        const canvas = canvasInstance.current;
-        if (!canvas) return;
-        magicEraserModeRef.current = enabled;
-        canvas.isDrawingMode = enabled; // Both normal and magic need drawing mode? No, pass enable from parent.
-        // Parent controls isDrawingMode, we just switch brush style/logic
-        configureEraserBrush(canvas);
-    },
-    
-    applyMagicEraser: async () => {
-        const canvas = canvasInstance.current;
-        const originalImg = originalImageRef.current;
-        if (!canvas || !originalImg || magicStrokeHistoryRef.current.length === 0) return;
 
-        try {
-            onLoadingChange(true);
-            
-            // 1. Generate Mask (Original Size)
-            const { width, height } = originalDimensionsRef.current;
-            const maskCanvas = document.createElement('canvas');
-            maskCanvas.width = width;
-            maskCanvas.height = height;
-            const ctx = maskCanvas.getContext('2d')!;
-            
-            // Fill black
-            ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, width, height);
 
-            // Draw strokes in white
-            // Need to handle scaling from canvas coords to original image coords
-            const scale = currentScaleRef.current; // Current display scale of the image object
-            
-            magicStrokeHistoryRef.current.forEach(stroke => {
-                if (stroke instanceof fabric.Path && stroke.path) {
-                    ctx.save();
-                    ctx.scale(1/scale, 1/scale); // Transform canvas coord to original
-                    ctx.beginPath();
-                    ctx.lineWidth = stroke.strokeWidth || brushSize;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    ctx.strokeStyle = 'white';
-                    
-                    // @ts-expect-error - Custom iterator
-                    stroke.path.forEach((cmd: any) => {
-                        const segment = cmd as (string | number)[];
-                        if (segment[0] === 'M') ctx.moveTo(segment[1] as number, segment[2] as number);
-                        if (segment[0] === 'Q') ctx.quadraticCurveTo(segment[1] as number, segment[2] as number, segment[3] as number, segment[4] as number);
-                        if (segment[0] === 'L') ctx.lineTo(segment[1] as number, segment[2] as number);
-                    });
-                    ctx.stroke();
-                    ctx.restore();
-                }
-            });
-
-            const maskData = maskCanvas.toDataURL('image/png');
-            
-            // 2. Get Current Foreground Image (as base)
-            // Ideally we use the full res composite.
-            // For simplicity, we can use the originalUrl if we haven't done other edits, 
-            // OR we need to snapshot the current state (minus magic strokes).
-            // Let's use the original cutout result (resultUrl) as base if available, or the originalImage?
-            // "Object Removal" from *Foreground*? Or original?
-            // Assuming removing from CUTOUT.
-            
-            // Snapshot current FG (without magic strokes)
-            // Hide magic strokes
-            magicStrokeHistoryRef.current.forEach(s => s.set('visible', false));
-            canvas.requestRenderAll();
-            
-            // We need a full res version of the current FG. 
-            // Reuse download logic-ish but for internal processing. 
-            // Actually, let's just use the current canvas visual (lower res) or original?
-            // High Quality: Use the original Cutout URL.
-            // But we might have erased parts manually? 
-            // Let's stick to: Remove object from the *Original Image* or the *Cutout*?
-            // If we remove from Cutout, we send Cutout + Mask.
-            
-            // Let's send the original cutout result. 
-            // (Ignoring manual eraser strokes for now to keep it simple, or we'd need to composite them).
-            
-            // TODO: Proper composition if mixing tools. For now, using resultUrl (clean cutout).
-            const imageToEdit = resultUrl; 
-
-            // 3. Call API
-            const res = await fetch('/api/magic-erase', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: imageToEdit, 
-                    mask: maskData,
-                    prompt: "remove object"
-                })
-            });
-            
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            
-            // 4. Update Canvas with New Image
-            const newUrl = data.url;
-            setResultUrl(newUrl); // Update state
-            
-            // Reload Main Image
-            fabric.FabricImage.fromURL(newUrl).then(img => {
-                // Find old main image
-                const oldImg = canvas.getObjects().find((o: any) => o.isMainImage);
-                if(oldImg) canvas.remove(oldImg);
-                
-                // Configure new
-                 img.scaleToWidth(canvas.width!);
-                (img as any).isMainImage = true;
-                img.set({
-                    selectable: false, evented: false
-                });
-                
-                // Reset history
-                strokeHistoryRef.current = []; // Reset normal eraser too? debatable.
-                magicStrokeHistoryRef.current = [];
-                canvas.remove(...magicStrokeHistoryRef.current); // Clear red strokes
-                 
-                 canvas.add(img);
-                 canvas.sendObjectToBack(img);
-                 canvas.requestRenderAll();
-            });
-
-        } catch (e) {
-            console.error(e);
-            alert("Magic Eraser failed");
-        } finally {
-            onLoadingChange(false);
-             // Clear magic strokes from view
-            magicStrokeHistoryRef.current.forEach(stroke => canvas.remove(stroke));
-            magicStrokeHistoryRef.current = [];
-        }
-    },
-
-    upscaleImage: async () => {
-         const originalImg = originalImageRef.current;
-         if (!originalImg) return;
-         try {
-             onLoadingChange(true);
-             // Use original image src 
-             const imageSrc = originalImg.src; 
-             
-             const res = await fetch('/api/upscale', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: imageSrc, scale: 2 })
-             });
-             const data = await res.json();
-             if (data.error) throw new Error(data.error);
-             
-             // Trigger download of upscaled result
-             const link = document.createElement('a');
-             link.download = 'upscaled-image.png';
-             link.href = data.url;
-             document.body.appendChild(link);
-             link.click();
-             document.body.removeChild(link);
-             
-             alert("Upscaled image downloaded!");
-             
-         } catch (e) {
-             console.error(e);
-             alert("Upscale failed");
-         } finally {
-             onLoadingChange(false);
-         }
-    },
 
     download: async () => {
       const canvas = canvasInstance.current;
       const bgCanvas = bgCanvasInstance.current;
       const originalImg = originalImageRef.current;
-      if (!canvas || !originalImg || !bgCanvas) return;
+      if (!canvas || !bgCanvas || !originalImg || !resultUrl) return;
       
       const { width, height } = originalDimensionsRef.current;
       const scale = currentScaleRef.current;
@@ -466,10 +300,12 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
            bgCanvas.sendObjectToBack(rect);
            bgCanvas.requestRenderAll();
 
-       } else if (type === 'image') {
-          fabric.FabricImage.fromURL(value).then(img => {
-             // Cover logic
-             const canvasAspect = bgCanvas.width! / bgCanvas.height!;
+        } else if (type === 'image') {
+           fabric.FabricImage.fromURL(value).then(img => {
+              if (!bgCanvasInstance.current) return;
+              const bgCanvas = bgCanvasInstance.current;
+              // Cover logic
+              const canvasAspect = bgCanvas.width! / bgCanvas.height!;
              const imgAspect = img.width! / img.height!;
              let scaleFactor;
              if (canvasAspect > imgAspect) {
@@ -511,6 +347,10 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
          bgCanvas.add(text);
          bgCanvas.setActiveObject(text);
          bgCanvas.requestRenderAll();
+    },
+
+    triggerRemoveBackground: async () => {
+        await processImage(true);
     }
   }));
 
@@ -553,15 +393,17 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
     canvas.on('path:created', (e) => {
       const path = e.path;
       if (path) {
-        path.set({
-          globalCompositeOperation: 'destination-out',
-          selectable: false,
-          evented: false
-        });
-        strokeHistoryRef.current.push(path);
-        canvas.requestRenderAll();
+         // Normal Eraser Stroke (Masking)
+         path.set({
+            globalCompositeOperation: 'destination-out',
+            selectable: false,
+            evented: false
+         });
+         strokeHistoryRef.current.push(path);
+         canvas.requestRenderAll();
       }
     });
+
 
     // Handle mouse wheel zoom
     canvas.on('mouse:wheel', (opt) => {
@@ -629,111 +471,137 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({ fil
        }
   }, [resultUrl]);
 
+  const processImage = async (forceRemoveBg = false, isCancelled?: () => boolean) => {
+    if (!file || !canvasInstance.current || !bgCanvasInstance.current || !containerRef.current) return;
+    
+    try {
+      onLoadingChange(true);
+      
+      let imageUrl: string;
+      const shouldRemove = forceRemoveBg || !isPrepMode;
+      
+      if (shouldRemove) {
+        // If we am in prep mode and resultUrl is already set (maybe via Magic Eraser),
+        // we should use THAT as the source for background removal.
+        let sourceFile: File | string = file;
+        
+        if (resultUrl && resultUrl.startsWith('data:')) {
+            sourceFile = resultUrl; 
+        } else if (resultUrl && resultUrl.startsWith('http')) {
+            sourceFile = resultUrl;
+        }
+
+        imageUrl = await removeBackground(sourceFile as any);
+      } else {
+        // Just show the original
+        imageUrl = URL.createObjectURL(file);
+      }
+      
+      if (isCancelled?.()) return;
+      onLoadingChange(false);
+      
+      // Revoke old URL if it was a local blob
+      if (resultUrl && resultUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(resultUrl);
+      }
+      
+      setResultUrl(imageUrl);
+      
+      const imgElement = new Image();
+      imgElement.crossOrigin = 'anonymous';
+      imgElement.onload = () => {
+        if (isCancelled?.() || !canvasInstance.current || !bgCanvasInstance.current) return;
+        
+        const canvas = canvasInstance.current;
+        const bgCanvas = bgCanvasInstance.current;
+        const container = containerRef.current;
+        if (!container) return;
+
+        originalImageRef.current = imgElement;
+        originalDimensionsRef.current = {
+          width: imgElement.naturalWidth,
+          height: imgElement.naturalHeight
+        };
+        
+        // Calculate scale
+        const padding = 32;
+        const containerWidth = container.clientWidth - padding;
+        const containerHeight = container.clientHeight - padding;
+        
+        const scale = Math.min(
+          containerWidth / imgElement.naturalWidth,
+          containerHeight / imgElement.naturalHeight,
+          1 
+        );
+        
+        currentScaleRef.current = scale;
+        
+        // Set canvas size
+        const canvasWidth = Math.floor(imgElement.naturalWidth * scale);
+        const canvasHeight = Math.floor(imgElement.naturalHeight * scale);
+        
+        canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+        bgCanvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+        
+        canvas.clear();
+        bgCanvas.clear();
+
+        // Create fabric image
+        fabric.FabricImage.fromURL(imageUrl).then((fabricImg) => {
+          if (isCancelled?.() || !canvasInstance.current) return;
+          
+          fabricImg.set({
+            scaleX: scale,
+            scaleY: scale,
+            selectable: false,
+            evented: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            originX: 'left',
+            originY: 'top',
+            left: 0,
+            top: 0
+          });
+          
+          // @ts-expect-error - Custom property
+          fabricImg.isMainImage = true;
+          canvasInstance.current!.add(fabricImg);
+          canvasInstance.current!.requestRenderAll();
+        });
+      };
+      imgElement.src = imageUrl;
+      
+    } catch (err) {
+      if (!isCancelled?.()) {
+        console.error('Error processing image:', err);
+        onLoadingChange(false);
+      }
+    }
+  };
+
   // Process uploaded file
   useEffect(() => {
     if (!file || !canvasInstance.current || !bgCanvasInstance.current || !containerRef.current) return;
     
-    const canvas = canvasInstance.current;
-    const bgCanvas = bgCanvasInstance.current;
-    const container = containerRef.current;
     let cancelled = false;
-    
+
     // Reset state
     strokeHistoryRef.current = [];
     originalImageRef.current = null;
     setZoomLevel(1);
-    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    bgCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    canvasInstance.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    bgCanvasInstance.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
     
-    canvas.clear();
-    bgCanvas.clear();
-    canvas.backgroundColor = 'transparent';
-    bgCanvas.backgroundColor = 'transparent';
-    
-    if (resultUrl) {
-      URL.revokeObjectURL(resultUrl);
+    // Revoke old blob
+    if (resultUrl && resultUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(resultUrl);
     }
-    
-    const processImage = async () => {
-      try {
-        onLoadingChange(true);
-        const cutoutUrl = await removeBackground(file);
-        
-        if (cancelled) return;
-        
-        onLoadingChange(false);
-        setResultUrl(cutoutUrl);
-        
-        const imgElement = new Image();
-        imgElement.crossOrigin = 'anonymous';
-        imgElement.onload = () => {
-          if (cancelled || !canvasInstance.current) return;
-          
-          originalImageRef.current = imgElement;
-          originalDimensionsRef.current = {
-            width: imgElement.naturalWidth,
-            height: imgElement.naturalHeight
-          };
-          
-          // Calculate scale
-          const padding = 32;
-          const containerWidth = container.clientWidth - padding;
-          const containerHeight = container.clientHeight - padding;
-          
-          const scale = Math.min(
-            containerWidth / imgElement.naturalWidth,
-            containerHeight / imgElement.naturalHeight,
-            1 
-          );
-          
-          currentScaleRef.current = scale;
-          
-          // Set canvas size
-          const canvasWidth = Math.floor(imgElement.naturalWidth * scale);
-          const canvasHeight = Math.floor(imgElement.naturalHeight * scale);
-          
-          canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
-          bgCanvas.setDimensions({ width: canvasWidth, height: canvasHeight });
-          
-          // Create fabric image
-          fabric.FabricImage.fromURL(cutoutUrl).then((fabricImg) => {
-            if (cancelled || !canvasInstance.current) return;
-            
-            fabricImg.set({
-              scaleX: scale,
-              scaleY: scale,
-              selectable: false,
-              evented: false,
-              lockMovementX: true,
-              lockMovementY: true,
-              originX: 'left',
-              originY: 'top',
-              left: 0,
-              top: 0
-            });
-            
-            canvas.add(fabricImg);
-            // We don't send to back because this canvas ONLY has the subject and strokes
-            canvas.requestRenderAll();
-          });
-        };
-        imgElement.src = cutoutUrl;
-        
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Error processing image:', err);
-          onLoadingChange(false);
-        }
-      }
-    };
+    setResultUrl(null);
 
-    processImage();
+    processImage(false, () => cancelled);
     
     return () => {
       cancelled = true;
-      if (resultUrl) {
-        URL.revokeObjectURL(resultUrl);
-      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);

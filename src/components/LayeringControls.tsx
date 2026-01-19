@@ -13,6 +13,8 @@ interface LayeringControlsProps {
   currentBackground: BackgroundConfig;
   onBackgroundChange: (config: BackgroundConfig) => void;
   onAddText: () => void;
+  activeFile: File | null;
+  isLoading?: boolean;
 }
 
 const SOLID_COLORS = [
@@ -37,6 +39,8 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
   currentBackground,
   onBackgroundChange,
   onAddText,
+  activeFile,
+  isLoading = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'color' | 'gradient' | 'image' | 'ai' | 'text'>('color');
   
@@ -95,7 +99,7 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
               onBackgroundChange({ type: 'image', value: data.url });
           } else if (data.mock && data.url) {
                onBackgroundChange({ type: 'image', value: data.url });
-               alert("OpenAI Key missing. Used mock image.");
+               alert("Gemini/OpenAI Key missing. Used mock image.");
           } else {
               alert(data.error || "Failed to generate");
           }
@@ -112,41 +116,46 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
       <div className="flex gap-2 border-b border-white/10 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('color')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          disabled={isLoading}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
             activeTab === 'color' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-          }`}
+          } disabled:opacity-50`}
         >
           <Palette className="w-4 h-4" /> Solid
         </button>
         <button
           onClick={() => setActiveTab('gradient')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          disabled={isLoading}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
             activeTab === 'gradient' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-          }`}
+          } disabled:opacity-50`}
         >
           <div className="w-4 h-4 rounded-sm bg-gradient-to-tr from-blue-400 to-purple-500" /> Gradient
         </button>
         <button
           onClick={() => setActiveTab('image')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          disabled={isLoading}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
             activeTab === 'image' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-          }`}
+          } disabled:opacity-50`}
         >
           <ImageIcon className="w-4 h-4" /> Image
         </button>
         <button
           onClick={() => setActiveTab('ai')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          disabled={isLoading}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
             activeTab === 'ai' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-          }`}
+          } disabled:opacity-50`}
         >
           <Sparkles className="w-4 h-4" /> AI
         </button>
         <button
           onClick={() => setActiveTab('text')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          disabled={isLoading}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
             activeTab === 'text' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-          }`}
+          } disabled:opacity-50`}
         >
           <Type className="w-4 h-4" /> Layers
         </button>
@@ -175,9 +184,10 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
               <button
                 key={color}
                 onClick={() => onBackgroundChange({ type: 'color', value: color })}
-                className={`aspect-square rounded-lg border-2 transition-transform hover:scale-105 ${
+                disabled={isLoading}
+                className={`aspect-square rounded-lg border-2 transition-all hover:scale-105 ${
                   currentBackground.value === color && currentBackground.type === 'color' ? 'border-white scale-105' : 'border-transparent'
-                }`}
+                } disabled:pointer-events-none disabled:opacity-50`}
                 style={{ backgroundColor: color }}
               />
             ))}
@@ -190,9 +200,10 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
               <button
                 key={gradient}
                 onClick={() => onBackgroundChange({ type: 'gradient', value: gradient })}
-                className={`h-16 rounded-lg border-2 transition-transform hover:scale-105 ${
+                disabled={isLoading}
+                className={`h-16 rounded-lg border-2 transition-all hover:scale-105 ${
                   currentBackground.value === gradient && currentBackground.type === 'gradient' ? 'border-white scale-105' : 'border-transparent'
-                }`}
+                } disabled:pointer-events-none disabled:opacity-50`}
                 style={{ background: gradient }}
               />
             ))}
@@ -201,12 +212,12 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
 
         {activeTab === 'image' && (
           <div className="space-y-4">
-             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg cursor-pointer hover:bg-white/5 hover:border-white/40 transition-colors">
+             <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5 hover:border-white/40'}`}>
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     <Upload className="w-6 h-6 text-neutral-400 mb-2" />
                     <p className="text-xs text-neutral-400">Upload Background</p>
                 </div>
-                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isLoading} />
             </label>
             
             <div className="space-y-2">
@@ -216,8 +227,9 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
                         type="text" 
                         value={unsplashQuery}
                         onChange={(e) => setUnsplashQuery(e.target.value)}
+                        disabled={isLoading}
                         placeholder="Search photos..." 
-                        className="w-full py-2 px-3 pl-9 bg-neutral-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        className="w-full py-2 px-3 pl-9 bg-neutral-800 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
                         onKeyDown={(e) => e.key === 'Enter' && fetchUnsplash(unsplashQuery)}
                     />
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-500" />
@@ -233,7 +245,8 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
                             <button 
                                 key={img.id}
                                 onClick={() => onBackgroundChange({ type: 'image', value: img.urls.regular })}
-                                className="relative aspect-video rounded-lg overflow-hidden group hover:opacity-90 transition-opacity"
+                                disabled={isLoading}
+                                className="relative aspect-video rounded-lg overflow-hidden group hover:opacity-90 transition-opacity disabled:opacity-30 disabled:pointer-events-none"
                             >
                                 <img src={img.urls.regular} alt={img.alt_description} className="w-full h-full object-cover" />
                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
@@ -254,18 +267,55 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
 
         {activeTab === 'ai' && (
            <div className="space-y-4">
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                  <label className="text-xs text-neutral-400">Describe your background</label>
                  <textarea
                    value={prompt}
                    onChange={(e) => setPrompt(e.target.value)}
                    placeholder="e.g. A cyberpunk city at night with neon lights..."
-                   className="w-full h-24 bg-neutral-800 border border-white/10 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:border-blue-500 transition-colors"
+                   disabled={isLoading || isGenerating}
+                   className="w-full h-24 bg-neutral-800 border border-white/10 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:border-blue-500 transition-colors pr-10 disabled:opacity-50"
                  />
+                  <button
+                    onClick={async () => {
+                        if (!activeFile) {
+                            alert("Please upload an image first for smart analysis!");
+                            return;
+                        }
+                        try {
+                            setIsGenerating(true);
+                            const reader = new FileReader();
+                            reader.readAsDataURL(activeFile);
+                            reader.onloadend = async () => {
+                                const base64data = reader.result;
+                                const res = await fetch('/api/analyze-image', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({ image: base64data })
+                                });
+                                const data = await res.json();
+                                if(data.suggestion) {
+                                    setPrompt(data.suggestion);
+                                } else {
+                                    alert(data.error || "Failed to analyze image");
+                                }
+                                setIsGenerating(false);
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            setIsGenerating(false);
+                        }
+                    }}
+                    className="absolute bottom-2 right-2 p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-purple-400 transition-colors disabled:opacity-50"
+                    title="Smart Suggest (Gemini)"
+                    disabled={isLoading || isGenerating}
+                  >
+                    {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  </button>
               </div>
               <button
                 onClick={handleGenerateBg}
-                disabled={isGenerating || !prompt.trim()}
+                disabled={isLoading || isGenerating || !prompt.trim()}
                 className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? (
@@ -280,7 +330,7 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
               </button>
               <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                  <p className="text-xs text-blue-400">
-                    Pro tip: Be specific about lighting, mood, and style for best results. DALL-E 3 creates high-quality 1024x1024 images.
+                    Pro tip: Be specific about lighting, mood, and style. Imagen 4.0 creates high-quality backgrounds instantly.
                  </p>
               </div>
            </div>
@@ -290,7 +340,8 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
            <div className="space-y-4">
                <button
                  onClick={onAddText}
-                 className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                 disabled={isLoading}
+                 className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  <Type className="w-4 h-4" /> Add Text Behind
                </button>

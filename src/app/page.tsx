@@ -19,6 +19,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [mode, setMode] = useState<EditorMode>('remove-bg');
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('cleanup');
+  const [isPrepPhase, setIsPrepPhase] = useState(false);
   
   // Eraser tool state
   const [eraserMode, setEraserMode] = useState(false);
@@ -53,8 +54,10 @@ export default function Home() {
       
       if (files.length === 1) {
         setActiveFile(files[0]);
+        setIsPrepPhase(true); // Always start in prep phase for single file
       } else {
         setActiveFile(null); // Bulk mode doesn't use activeFile
+        setIsPrepPhase(false);
       }
     }
   };
@@ -99,6 +102,7 @@ export default function Home() {
             <RemoveBgCanvas 
               ref={removeBgRef} 
               file={activeFile} 
+              isPrepMode={isPrepPhase}
               onLoadingChange={setIsLoading}
               onProgressChange={setProgress}
             />
@@ -113,46 +117,55 @@ export default function Home() {
 
           {/* Loading Overlay with Progress */}
           {isLoading && (
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-              <div className="relative w-24 h-24 mb-6">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-50 animate-in fade-in duration-300">
+              <div className="relative w-32 h-32 mb-8">
                 {/* Circular progress background */}
-                <svg className="w-full h-full transform -rotate-90">
+                <svg className="w-full h-full transform -rotate-90 scale-110">
                   <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
+                    cx="64"
+                    cy="64"
+                    r="56"
                     fill="none"
-                    stroke="rgba(255,255,255,0.1)"
+                    stroke="rgba(255,255,255,0.05)"
                     strokeWidth="8"
                   />
                   <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
+                    cx="64"
+                    cy="64"
+                    r="56"
                     fill="none"
                     stroke="url(#progressGradient)"
                     strokeWidth="8"
                     strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 40}
-                    strokeDashoffset={2 * Math.PI * 40 * (1 - progress / 100)}
-                    className="transition-all duration-200"
+                    strokeDasharray={2 * Math.PI * 56}
+                    strokeDashoffset={2 * Math.PI * 56 * (1 - progress / 100)}
+                    className="transition-all duration-300 ease-out"
                   />
                   <defs>
-                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#3b82f6" />
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="50%" stopColor="#3b82f6" />
                       <stop offset="100%" stopColor="#06b6d4" />
                     </linearGradient>
                   </defs>
                 </svg>
                 {/* Percentage text */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">{progress}%</span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-black text-white tracking-tighter">{progress}%</span>
                 </div>
               </div>
-              <p className="text-white font-medium text-lg">
-                {mode === 'remove-bg' ? 'Removing background...' : 'Analyzing layers...'}
-              </p>
-              <p className="text-neutral-400 text-sm mt-2">BiRefNet (SOTA 2024)</p>
+              
+              <div className="text-center space-y-2 max-w-xs">
+                <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                  {progress < 100 ? 'Processing...' : 'Almost there...'}
+                </h3>
+                <p className="text-neutral-400 text-sm font-medium">
+                   {isPrepPhase ? 'Magic AI is perfecting your image' : 'Isolating the subject with BiRefNet'}
+                </p>
+                {progress > 80 && (
+                   <p className="text-[10px] text-neutral-600 uppercase tracking-widest animate-pulse mt-4"> Finalizing pixels </p>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -179,22 +192,24 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-2">
                 <button
                 onClick={() => handleModeChange('remove-bg')}
+                disabled={isLoading}
                 className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
                     mode === 'remove-bg'
                     ? 'bg-blue-600/20 border-blue-500 text-blue-400'
                     : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                }`}
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                 <Scissors className="w-5 h-5" />
                 <span className="text-xs font-medium">Remove BG</span>
                 </button>
                 <button
                 onClick={() => handleModeChange('text-behind')}
+                disabled={isLoading}
                 className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
                     mode === 'text-behind'
                     ? 'bg-purple-600/20 border-purple-500 text-purple-400'
                     : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                }`}
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                 <ImagePlus className="w-5 h-5" />
                 <span className="text-xs font-medium">Legacy Editor</span>
@@ -205,12 +220,13 @@ export default function Home() {
             {/* Section: Source */}
             <div className="space-y-3">
             <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Source</h2>
-            <div className="relative group">
+            <div className={`relative group ${isLoading ? 'pointer-events-none opacity-50' : ''}`}>
                 <input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={handleFileChange}
+                disabled={isLoading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
                 <button className="w-full py-4 px-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center gap-3 group-hover:shadow-lg group-active:scale-[0.98]">
@@ -226,30 +242,55 @@ export default function Home() {
             </div>
 
             {/* Editor Tabs (Only for remove-bg mode + active file) */}
-            {mode === 'remove-bg' && activeFile && !isLoading && (
+            {mode === 'remove-bg' && activeFile && (
                 <div className="space-y-4">
-                     {/* Tab Switcher */}
-                     <div className="flex bg-white/5 p-1 rounded-lg">
-                        <button 
-                            onClick={() => setSidebarTab('cleanup')}
-                            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
-                                sidebarTab === 'cleanup' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                            }`}
-                        >
-                            <Eraser className="w-3.5 h-3.5" /> Cleanup
-                        </button>
+                     {/* Prep Phase Header */}
+                     {isPrepPhase && (
+                        <div className="p-4 bg-blue-600/10 border border-blue-500/20 rounded-xl space-y-3">
+                            <h3 className="text-sm font-bold text-blue-400 flex items-center gap-2">
+                                <Sparkles className="w-4 h-4" /> Magic Prep Phase
+                            </h3>
+                            <p className="text-xs text-neutral-400">
+                               Enhance your photo with **Upscale** before removing the background.
+                            </p>
+                            <button 
+                                onClick={async () => {
+                                    await removeBgRef.current?.triggerRemoveBackground();
+                                    setIsPrepPhase(false);
+                                    setSidebarTab('layers');
+                                }}
+                                disabled={isLoading}
+                                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Scissors className="w-4 h-4" /> Remove Background
+                            </button>
+                        </div>
+                     )}
+
+                      {/* Tab Switcher */}
+                      <div className="flex bg-white/5 p-1 rounded-lg">
                          <button 
-                            onClick={() => {
-                                setSidebarTab('layers');
-                                handleEraserToggle(false); // Disable eraser when switching to layers
-                            }}
-                            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
-                                sidebarTab === 'layers' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                            }`}
-                        >
-                            <Palette className="w-3.5 h-3.5" /> Background
-                        </button>
-                     </div>
+                             onClick={() => setSidebarTab('cleanup')}
+                             disabled={isLoading}
+                             className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                                 sidebarTab === 'cleanup' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                             } disabled:opacity-50`}
+                         >
+                             <Eraser className="w-3.5 h-3.5" /> Cleanup
+                         </button>
+                          <button 
+                             onClick={() => {
+                                 setSidebarTab('layers');
+                                 handleEraserToggle(false); // Disable eraser when switching to layers
+                             }}
+                             disabled={isLoading}
+                             className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                                 sidebarTab === 'layers' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                             } disabled:opacity-50`}
+                         >
+                             <Palette className="w-3.5 h-3.5" /> Background
+                         </button>
+                      </div>
 
                     {sidebarTab === 'cleanup' ? (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -257,60 +298,34 @@ export default function Home() {
                             <button
                             onClick={() => {
                                 handleEraserToggle(false);
-                                removeBgRef.current?.setMagicEraserMode(false);
                             }}
+                            disabled={isLoading}
                             className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                                !eraserMode && !activeFile // Need state for magic mode? Storing in eraserMode might be conflicting.
-                                // Let's assume eraserMode only tracks normal eraser for now, or we expand it.
-                                // Simplified: tracked via local state or ref in page?
-                                // For now, just button visuals based on active tool.
+                                !eraserMode && !activeFile 
                                 ? 'bg-cyan-600/20 border-cyan-500 text-cyan-400'
                                 : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                            }`}
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                             <MousePointer2 className="w-5 h-5" />
                             <span className="text-xs font-medium">Select</span>
                             </button>
                             <button
-                            onClick={() => handleEraserToggle(true)}
+                            onClick={() => {
+                                handleEraserToggle(true);
+                            }}
+                            disabled={isLoading}
                             className={`py-3 px-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
                                 eraserMode
                                 ? 'bg-red-600/20 border-red-500 text-red-400'
                                 : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10 hover:border-white/20'
-                            }`}
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                             <Eraser className="w-5 h-5" />
                             <span className="text-xs font-medium">Eraser</span>
                             </button>
                         </div>
                         
-                        {/* Magic Eraser Button */}
-                       <button
-                            onClick={() => {
-                                setEraserMode(false); // Disable normal eraser
-                                removeBgRef.current?.setEraserMode(false);
-                                removeBgRef.current?.setMagicEraserMode(true);
-                                alert("Magic Eraser Active! Paint over object to remove.");
-                            }}
-                            className="w-full py-3 px-3 bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/50 hover:border-pink-500 text-pink-400 rounded-xl transition-all flex items-center justify-center gap-2 group"
-                        >
-                            <Sparkles className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                            <span className="text-sm font-medium">Magic Eraser</span>
-                        </button>
-                        <div className="flex gap-2">
-                             <button 
-                                 onClick={() => removeBgRef.current?.applyMagicEraser()}
-                                 className="flex-1 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold"
-                             >
-                                 Apply Magic
-                             </button>
-                             <button 
-                                 onClick={() => removeBgRef.current?.setMagicEraserMode(false)}
-                                 className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg text-xs"
-                             >
-                                 Cancel
-                             </button>
-                        </div>
+
 
                         {eraserMode && (
                             <div className="space-y-2">
@@ -323,38 +338,33 @@ export default function Home() {
                                 min="10"
                                 max="100"
                                 value={brushSize}
+                                disabled={isLoading}
                                 onChange={(e) => handleBrushSizeChange(parseInt(e.target.value))}
-                                className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-2">
+                         <div className="grid grid-cols-2 gap-2">
                             <button
                             onClick={() => removeBgRef.current?.undo()}
-                            className="py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 text-neutral-400 hover:text-white"
+                            disabled={isLoading}
+                            className="py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 text-neutral-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                             <RotateCcw className="w-4 h-4" />
                             <span className="text-xs font-medium">Undo</span>
                             </button>
                             <button
                             onClick={() => removeBgRef.current?.reset()}
-                            className="py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 text-neutral-400 hover:text-white"
+                            disabled={isLoading}
+                            className="py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 text-neutral-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                             <RefreshCw className="w-4 h-4" />
                             <span className="text-xs font-medium">Reset</span>
                             </button>
                         </div>
                         
-                        <div className="pt-2 border-t border-white/10">
-                            <button
-                                onClick={() => removeBgRef.current?.upscaleImage()}
-                                className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/50 hover:border-emerald-500 text-emerald-400 rounded-xl transition-all flex items-center justify-center gap-2"
-                            >
-                                <Maximize2 className="w-4 h-4" />
-                                <span className="text-sm font-medium">Upscale Image (2x)</span>
-                            </button>
-                        </div>
+
                         </div>
                     ) : (
                         <div className="h-[400px] animate-in fade-in slide-in-from-right-4 duration-300">
@@ -362,6 +372,8 @@ export default function Home() {
                                 currentBackground={currentBackground}
                                 onBackgroundChange={handleBackgroundChange}
                                 onAddText={handleAddText}
+                                activeFile={activeFile}
+                                isLoading={isLoading}
                              />
                         </div>
                     )}

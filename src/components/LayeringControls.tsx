@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { Palette, Image as ImageIcon, Type, Upload, Sparkles, Loader2, Search } from 'lucide-react';
+import { Palette, Image as ImageIcon, Type, Upload, Sparkles, Loader2, Search, Bold, Italic, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { TextOptions } from './RemoveBgCanvas';
 
 export type BackgroundType = 'transparent' | 'color' | 'gradient' | 'image';
 
@@ -15,7 +15,11 @@ interface LayeringControlsProps {
   onAddText: () => void;
   activeFile: File | null;
   isLoading?: boolean;
+  activeObject?: any; // Fabric object
+  onUpdateText?: (options: TextOptions) => void;
 }
+
+const FONTS = ['Inter', 'Roboto', 'Playfair Display', 'Montserrat', 'Lato', 'Oswald'];
 
 const SOLID_COLORS = [
   '#ffffff', '#000000', '#f3f4f6', '#e5e7eb', '#d1d5db',
@@ -41,6 +45,8 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
   onAddText,
   activeFile,
   isLoading = false,
+  activeObject,
+  onUpdateText
 }) => {
   const [activeTab, setActiveTab] = useState<'color' | 'gradient' | 'image' | 'ai' | 'text'>('color');
   
@@ -338,16 +344,97 @@ export const LayeringControls: React.FC<LayeringControlsProps> = ({
 
         {activeTab === 'text' && (
            <div className="space-y-4">
-               <button
-                 onClick={onAddText}
-                 disabled={isLoading}
-                 className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-               >
-                 <Type className="w-4 h-4" /> Add Text Behind
-               </button>
-               <p className="text-xs text-neutral-400 text-center">
-                 Text added here will appear behind the subject.
-               </p>
+                <button
+                  onClick={onAddText}
+                  disabled={isLoading}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Type className="w-4 h-4" /> Add Text Behind
+                </button>
+                
+                {activeObject && (activeObject.type === 'i-text' || activeObject.type === 'text') && onUpdateText ? (
+                    <div className="space-y-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="space-y-2">
+                            <label className="text-xs text-neutral-400">Font Family</label>
+                            <select 
+                                value={activeObject.fontFamily}
+                                onChange={(e) => onUpdateText({ fontFamily: e.target.value })}
+                                className="w-full bg-neutral-800 border border-white/10 rounded-lg py-1.5 px-2 text-sm text-white focus:outline-none"
+                            >
+                                {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            <div className="flex-1 space-y-2">
+                                <label className="text-xs text-neutral-400">Color</label>
+                                <div className="flex gap-1.5 flex-wrap">
+                                    {SOLID_COLORS.slice(0, 8).map(c => (
+                                        <button
+                                            key={c}
+                                            className={`w-6 h-6 rounded-full border ${activeObject.fill === c ? 'border-white ring-1 ring-white' : 'border-white/20'}`}
+                                            style={{ backgroundColor: c }}
+                                            onClick={() => onUpdateText({ fill: c })}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                         </div>
+                         
+                         <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs text-neutral-400">Size</label>
+                                <span className="text-xs text-neutral-500">{activeObject.fontSize}px</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="10" 
+                                max="200" 
+                                value={activeObject.fontSize || 60} 
+                                onChange={(e) => onUpdateText({ fontSize: parseInt(e.target.value) })}
+                                className="w-full"
+                            />
+                         </div>
+
+                         <div className="flex items-center gap-2 bg-neutral-800 p-1 rounded-lg border border-white/5">
+                            <button 
+                                onClick={() => onUpdateText({ fontWeight: activeObject.fontWeight === 'bold' ? 'normal' : 'bold' })}
+                                className={`p-1.5 rounded flex-1 flex justify-center hover:bg-white/10 transition-colors ${activeObject.fontWeight === 'bold' ? 'bg-white/20 text-white' : 'text-neutral-400'}`}
+                            >
+                                <Bold className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={() => onUpdateText({ fontStyle: activeObject.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                                className={`p-1.5 rounded flex-1 flex justify-center hover:bg-white/10 transition-colors ${activeObject.fontStyle === 'italic' ? 'bg-white/20 text-white' : 'text-neutral-400'}`}
+                            >
+                                <Italic className="w-4 h-4" />
+                            </button>
+                             <div className="w-px h-4 bg-white/10 mx-1" />
+                             <button
+                                onClick={() => onUpdateText({ textAlign: 'left' })}
+                                className={`p-1.5 rounded flex-1 flex justify-center hover:bg-white/10 transition-colors ${activeObject.textAlign === 'left' ? 'bg-white/20 text-white' : 'text-neutral-400'}`}
+                            >
+                                <AlignLeft className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => onUpdateText({ textAlign: 'center' })}
+                                className={`p-1.5 rounded flex-1 flex justify-center hover:bg-white/10 transition-colors ${activeObject.textAlign === 'center' ? 'bg-white/20 text-white' : 'text-neutral-400'}`}
+                            >
+                                <AlignCenter className="w-4 h-4" />
+                            </button>
+                             <button
+                                onClick={() => onUpdateText({ textAlign: 'right' })}
+                                className={`p-1.5 rounded flex-1 flex justify-center hover:bg-white/10 transition-colors ${activeObject.textAlign === 'right' ? 'bg-white/20 text-white' : 'text-neutral-400'}`}
+                            >
+                                <AlignRight className="w-4 h-4" />
+                            </button>
+                         </div>
+                    </div>
+                ) : (
+                   <p className="text-xs text-neutral-400 text-center py-4">
+                     Select a text object to edit its style.
+                   </p>
+                )}
            </div>
         )}
       </div>

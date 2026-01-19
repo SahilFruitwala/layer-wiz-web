@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import EditorCanvas, { EditorCanvasRef } from '@/components/EditorCanvas';
-import RemoveBgCanvas, { RemoveBgCanvasRef } from '@/components/RemoveBgCanvas';
+import RemoveBgCanvas, { RemoveBgCanvasRef, TextOptions } from '@/components/RemoveBgCanvas';
 import BulkImageProcessor from '@/components/BulkImageProcessor';
 import { LayeringControls, BackgroundConfig } from '@/components/LayeringControls';
 import { Upload, Type, Download, Loader2, Layers, Scissors, ImagePlus, Eraser, MousePointer2, RotateCcw, RefreshCw, Palette, Sparkles, Maximize2 } from 'lucide-react';
@@ -28,6 +28,9 @@ export default function Home() {
   // Background state
   const [currentBackground, setCurrentBackground] = useState<BackgroundConfig>({ type: 'transparent', value: '' });
   
+  // Selected Text State
+  const [activeObject, setActiveObject] = useState<any>(null); // Fabric object properties
+
   const handleEraserToggle = (enabled: boolean) => {
     setEraserMode(enabled);
     removeBgRef.current?.setEraserMode(enabled);
@@ -105,6 +108,7 @@ export default function Home() {
               isPrepMode={isPrepPhase}
               onLoadingChange={setIsLoading}
               onProgressChange={setProgress}
+              onSelectionChange={setActiveObject}
             />
           ) : (
             <EditorCanvas 
@@ -374,6 +378,8 @@ export default function Home() {
                                 onAddText={handleAddText}
                                 activeFile={activeFile}
                                 isLoading={isLoading}
+                                activeObject={activeObject}
+                                onUpdateText={(opts) => removeBgRef.current?.updateText(opts)}
                              />
                         </div>
                     )}

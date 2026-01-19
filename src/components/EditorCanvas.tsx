@@ -29,13 +29,15 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
     fgImage: fabric.FabricImage | null;
     originalWidth: number;
     originalHeight: number;
-  }>({ bgImage: null, fgImage: null, originalWidth: 0, originalHeight: 0 });
+    fgOriginalWidth: number;
+    fgOriginalHeight: number;
+  }>({ bgImage: null, fgImage: null, originalWidth: 0, originalHeight: 0, fgOriginalWidth: 0, fgOriginalHeight: 0 });
 
   // Recalculate and apply scaling to fit container
   const fitToContainer = () => {
     const canvas = canvasInstance.current;
     const container = containerRef.current;
-    const { bgImage, fgImage, originalWidth, originalHeight } = imageLayersRef.current;
+    const { bgImage, fgImage, originalWidth, originalHeight, fgOriginalWidth, fgOriginalHeight } = imageLayersRef.current;
     
     if (!canvas || !container || !bgImage || originalWidth === 0) return;
 
@@ -53,7 +55,7 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
     
     canvas.setDimensions({ width: newWidth, height: newHeight });
     
-    // Scale and position both layers - ensure origin is top-left
+    // Scale and position BG layer
     bgImage.set({ 
       scaleX: scale, 
       scaleY: scale, 
@@ -64,10 +66,24 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
     });
     bgImage.setCoords();
     
-    if (fgImage) {
+    // Scale FG layer to MATCH the BG layer's visual dimensions exactly
+    // Regardless of resolution differences
+    if (fgImage && fgOriginalWidth > 0 && fgOriginalHeight > 0) {
+      // We want FG to occupy exactly (newWidth x newHeight)
+      const fgScaleX = newWidth / fgOriginalWidth;
+      const fgScaleY = newHeight / fgOriginalHeight;
+      
+      console.log('[EditorCanvas] Scaling:', {
+        bgOriginal: { w: originalWidth, h: originalHeight },
+        fgOriginal: { w: fgOriginalWidth, h: fgOriginalHeight },
+        canvasSize: { w: newWidth, h: newHeight },
+        bgScale: scale,
+        fgScale: { x: fgScaleX, y: fgScaleY }
+      });
+      
       fgImage.set({ 
-        scaleX: scale, 
-        scaleY: scale, 
+        scaleX: fgScaleX, 
+        scaleY: fgScaleY, 
         left: 0, 
         top: 0,
         originX: 'left',
@@ -209,7 +225,7 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
       // Clear previous content
       canvas.clear();
       canvas.backgroundColor = '#1a1a1a';
-      imageLayersRef.current = { bgImage: null, fgImage: null, originalWidth: 0, originalHeight: 0 };
+      imageLayersRef.current = { bgImage: null, fgImage: null, originalWidth: 0, originalHeight: 0, fgOriginalWidth: 0, fgOriginalHeight: 0 };
       
       try {
         const imgUrl = URL.createObjectURL(file);
@@ -249,6 +265,8 @@ const EditorCanvas = forwardRef<EditorCanvasRef, EditorCanvasProps>(({ file, onL
         });
         
         imageLayersRef.current.fgImage = fgImage;
+        imageLayersRef.current.fgOriginalWidth = fgImage.width || 0;
+        imageLayersRef.current.fgOriginalHeight = fgImage.height || 0;
         
         canvas.add(fgImage);
         canvas.bringObjectToFront(fgImage);

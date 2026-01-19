@@ -10,6 +10,16 @@ interface RemoveBgCanvasProps {
   onLoadingChange: (loading: boolean) => void;
   onProgressChange?: (progress: number) => void;
   isPrepMode?: boolean;
+  onSelectionChange?: (object: fabric.Object | null) => void;
+}
+
+export interface TextOptions {
+  fill?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: string | number;
+  fontStyle?: 'normal' | 'italic';
+  textAlign?: string;
 }
 
 export interface RemoveBgCanvasRef {
@@ -20,6 +30,7 @@ export interface RemoveBgCanvasRef {
   reset: () => void;
   setBackground: (type: string, value: string) => void;
   addText: () => void;
+  updateText: (options: TextOptions) => void;
   triggerRemoveBackground: () => Promise<void>;
 }
 
@@ -27,7 +38,8 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
   file, 
   onLoadingChange, 
   onProgressChange,
-  isPrepMode = false
+  isPrepMode = false,
+  onSelectionChange
 }, ref) => {
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const bgCanvasEl = useRef<HTMLCanvasElement>(null);
@@ -39,6 +51,8 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [brushSize, setBrushSizeState] = useState(30);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isEraserMode, setIsEraserMode] = useState(false);
+  const isEraserModeRef = useRef(false);
   
   const isPanningRef = useRef(false);
   
@@ -190,6 +204,8 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
     },
     
     setEraserMode: (enabled: boolean) => {
+      setIsEraserMode(enabled);
+      isEraserModeRef.current = enabled;
       const canvas = canvasInstance.current;
       if (!canvas) return;
       canvas.isDrawingMode = enabled;
@@ -339,14 +355,25 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
              top: bgCanvas.height! / 2,
              originX: 'center',
              originY: 'center',
-             fontFamily: 'Arial',
+             fontFamily: 'Inter',
              fill: '#ffffff',
              fontSize: 60,
+             fontWeight: 'bold',
              shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
          });
          bgCanvas.add(text);
          bgCanvas.setActiveObject(text);
          bgCanvas.requestRenderAll();
+    },
+
+    updateText: (options: TextOptions) => {
+        const bgCanvas = bgCanvasInstance.current;
+        if (!bgCanvas) return;
+        const activeObject = bgCanvas.getActiveObject();
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'text')) {
+            activeObject.set(options);
+            bgCanvas.requestRenderAll();
+        }
     },
 
     triggerRemoveBackground: async () => {
@@ -380,6 +407,18 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
     });
     bgCanvasInstance.current = bgCanvas;
 
+    // Handle Selection Events
+    const handleSelection = () => {
+        const active = bgCanvas.getActiveObject();
+        if (onSelectionChange) {
+            onSelectionChange(active || null);
+        }
+    };
+
+    bgCanvas.on('selection:created', handleSelection);
+    bgCanvas.on('selection:updated', handleSelection);
+    bgCanvas.on('selection:cleared', handleSelection);
+
     // 2. Fg Canvas
     const canvas = new fabric.Canvas(canvasEl.current, {
       backgroundColor: 'transparent',
@@ -405,54 +444,76 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
     });
 
 
-    // Handle mouse wheel zoom
-    canvas.on('mouse:wheel', (opt) => {
-      const delta = opt.e.deltaY;
-      const zoomDelta = delta > 0 ? -0.1 : 0.1;
-      const pointer = canvas.getScenePoint(opt.e);
-      
-      let newZoom = canvas.getZoom() + zoomDelta;
-      newZoom = Math.min(Math.max(0.5, newZoom), 5);
-      
-      canvas.zoomToPoint(new fabric.Point(pointer.x, pointer.y), newZoom);
-      setZoomLevel(newZoom);
-      
-      syncBackgroundCanvas();
 
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
-    });
+    // Helper to bind events
+    const bindEvents = (source: fabric.Canvas, target: fabric.Canvas) => {
+         // Handle mouse wheel zoom
+        source.on('mouse:wheel', (opt) => {
+            const delta = opt.e.deltaY;
+            const zoomDelta = delta > 0 ? -0.1 : 0.1;
+            const pointer = source.getScenePoint(opt.e);
+            
+            let newZoom = source.getZoom() + zoomDelta;
+            newZoom = Math.min(Math.max(0.5, newZoom), 5);
+            
+            source.zoomToPoint(new fabric.Point(pointer.x, pointer.y), newZoom);
+            // Sync target
+            target.zoomToPoint(new fabric.Point(pointer.x, pointer.y), newZoom);
+            
+            setZoomLevel(newZoom);
+            
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+        });
 
-    // Handle panning
-    canvas.on('mouse:down', (opt) => {
-      const evt = opt.e as MouseEvent;
-      if (evt.button === 1 || evt.altKey) {
-        isPanningRef.current = true;
-        canvas.isDrawingMode = false;
-        lastPanPosRef.current = { x: evt.clientX, y: evt.clientY };
-        canvas.setCursor('grab');
-      }
-    });
+        // Handle panning
+        source.on('mouse:down', (opt) => {
+            const evt = opt.e as MouseEvent;
+            if (evt.button === 1 || evt.altKey) {
+                isPanningRef.current = true;
+                source.isDrawingMode = false;
+                lastPanPosRef.current = { x: evt.clientX, y: evt.clientY };
+                source.setCursor('grab');
+            }
+        });
 
-    canvas.on('mouse:move', (opt) => {
-      if (!isPanningRef.current) return;
-      
-      const evt = opt.e as MouseEvent;
-      const vpt = canvas.viewportTransform;
-      if (!vpt) return;
-      
-      vpt[4] += evt.clientX - lastPanPosRef.current.x;
-      vpt[5] += evt.clientY - lastPanPosRef.current.y;
-      
-      lastPanPosRef.current = { x: evt.clientX, y: evt.clientY };
-      canvas.requestRenderAll();
-      syncBackgroundCanvas();
-    });
+        source.on('mouse:move', (opt) => {
+            if (!isPanningRef.current) return;
+            
+            const evt = opt.e as MouseEvent;
+            const vpt = source.viewportTransform;
+            if (!vpt) return;
+            
+            vpt[4] += evt.clientX - lastPanPosRef.current.x;
+            vpt[5] += evt.clientY - lastPanPosRef.current.y;
+            
+            // Sync target vpt
+            if (target.viewportTransform) {
+                target.viewportTransform[4] = vpt[4];
+                target.viewportTransform[5] = vpt[5];
+                target.requestRenderAll();
+            }
 
-    canvas.on('mouse:up', () => {
-      isPanningRef.current = false;
-      canvas.setCursor('default');
-    });
+            lastPanPosRef.current = { x: evt.clientX, y: evt.clientY };
+            source.requestRenderAll();
+        });
+
+        source.on('mouse:up', () => {
+            isPanningRef.current = false;
+            source.setCursor('default');
+            // If we turned off drawing mode for panning, restore it if needed
+            // But actually we only pan on active canvas.
+            // If erasing, we might need to restore isDrawingMode?
+            // Simple check:
+            if (source === canvasInstance.current && isEraserModeRef.current) {
+                 source.isDrawingMode = true; 
+            }
+        });
+    };
+
+    // Bind events to both
+    bindEvents(canvas, bgCanvas);
+    bindEvents(bgCanvas, canvas);
 
     return () => {
       canvas.dispose();
@@ -461,6 +522,7 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
       bgCanvasInstance.current = null;
     };
   }, [syncBackgroundCanvas]);
+
 
   // Handle Resize/Init of BG Canvas dimensions
   useEffect(() => {
@@ -632,7 +694,7 @@ const RemoveBgCanvas = forwardRef<RemoveBgCanvasRef, RemoveBgCanvasProps>(({
       </div>
 
       {/* Foreground Canvas (Layer 1) */}
-      <div className="absolute z-20 w-auto h-auto" style={{ pointerEvents: brushSize > 0 ? 'auto' : 'none' }}> 
+      <div className="absolute z-20 w-auto h-auto" style={{ pointerEvents: isEraserMode ? 'auto' : 'none' }}> 
          <canvas ref={canvasEl} />
       </div>
       

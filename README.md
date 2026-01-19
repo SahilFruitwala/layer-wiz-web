@@ -70,16 +70,20 @@ To enable these features:
 If you prefer to run things separately:
 
 ```bash
-# Terminal 1: Frontend
+# 1. Install Dependencies
 npm install
-npm run dev
-
-# Terminal 2: Backend
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload
+cd ..
+
+# 2. Start App (runs both)
+npm run dev
+
+# Or run separately:
+# Terminal 1: npm run dev:frontend
+# Terminal 2: npm run dev:backend
 ```
 
 ## License

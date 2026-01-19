@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" --names \"FRONT,BACK\" --prefix-colors \"cyan,blue\"",
+    "dev:frontend": "next dev",
+    "dev:backend": "cd backend && . .venv/bin/activate && uvicorn main:app --reload --port 8000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

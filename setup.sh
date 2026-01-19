@@ -113,8 +113,7 @@ print_success() {
     echo "  ${YELLOW}./start.sh${NC}"
     echo ""
     echo "Or start manually:"
-    echo "  Terminal 1: ${YELLOW}$PKG_MANAGER run dev${NC}"
-    echo "  Terminal 2: ${YELLOW}cd backend && source .venv/bin/activate && uvicorn main:app --reload${NC}"
+    echo "  ${YELLOW}$PKG_MANAGER run dev${NC} (starts both frontend and backend)"
     echo ""
 }
 

@@ -62,38 +62,12 @@ if [ "$needs_setup" = true ]; then
     echo ""
 fi
 
-# Function to cleanup on exit
-cleanup() {
-    echo ""
-    echo "Shutting down..."
-    kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
-    exit 0
-}
-
-trap cleanup SIGINT SIGTERM
-
-# Start backend
-echo -e "${CYAN}🐍 Starting Python backend on http://localhost:8000${NC}"
-cd backend
-source .venv/bin/activate
-uvicorn main:app --reload --port 8000 &
-BACKEND_PID=$!
-cd ..
-
-# Wait a moment for backend to start
-sleep 2
-
-# Start frontend
-echo -e "${CYAN}⚡ Starting Next.js frontend on http://localhost:3000${NC}"
-$PKG_MANAGER run dev &
-FRONTEND_PID=$!
-
+# Start everything
+echo -e "${CYAN}⚡ Starting LayerWiz...${NC}"
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo -e "${GREEN}✅ LayerWiz is running!${NC}"
+echo -e "${GREEN}✅ LayerWiz is starting!${NC}"
 echo "═══════════════════════════════════════════════════"
-echo ""
 echo -e "  Frontend: ${YELLOW}http://localhost:3000${NC}"
 echo -e "  Backend:  ${YELLOW}http://localhost:8000${NC}"
 echo -e "  API Docs: ${YELLOW}http://localhost:8000/docs${NC}"
@@ -101,5 +75,4 @@ echo ""
 echo "Press Ctrl+C to stop all servers"
 echo ""
 
-# Wait for processes
-wait
+$PKG_MANAGER run dev
